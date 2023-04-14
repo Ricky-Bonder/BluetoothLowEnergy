@@ -9,7 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func serve(adapterID string, deviceName string) error {
+func Serve(adapterID string, deviceName string) error {
 
 	options := service.AppOptions{
 		AdapterID:  adapterID,
