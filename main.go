@@ -8,15 +8,15 @@ import (
 )
 
 func main() {
-	adapterID := "myAdapterID"
-	deviceName := "AHU-Device-Name-Temp"
-	err := Serve(adapterID, deviceName)
+	adapterID := "hci0"
+	// deviceName := "AHU-Device-Name-Temp"
+	err := Run(adapterID)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
 	}
 }
 
-func Run(adapterID string, deviceName string) error {
+func Run(adapterID string) error {
 
 	log.SetLevel(log.TraceLevel)
 
@@ -25,6 +25,7 @@ func Run(adapterID string, deviceName string) error {
 		btmgmt.BinPath = "./bin/docker-btmgmt"
 	}
 
+	deviceName := "Ciao ciao ciao"
 	// flag.StringVar(&deviceName, "name", "", "Name of the device to advertise")
 
 	// flag.Parse()
@@ -33,7 +34,7 @@ func Run(adapterID string, deviceName string) error {
 		log.Fatal("Device name is required")
 	}
 
-	err := Serve(adapterID, deviceName)
+	err := serve(adapterID, deviceName)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
 	}
@@ -44,6 +45,6 @@ func Run(adapterID string, deviceName string) error {
 	btmgmt.SetBredr(false)
 	btmgmt.SetPowered(true)
 
-	return Serve(adapterID, deviceName)
+	return serve(adapterID, deviceName)
 
 }

@@ -40,10 +40,10 @@ gen/run: bluez/checkout
 gen: gen/run
 
 build: gen
-	CGO_ENABLED=0 go build -o go-bluetooth ./main.go
+	CGO_ENABLED=0 go build -o myBle ./main.go
 
 dev/kill:
-	ssh ${DEV_HOST} "killall go-bluetooth" || true
+	ssh ${DEV_HOST} "killall myBle" || true
 
 docker/bluetoothd/init:
 	sudo addgroup bluetooth || true
