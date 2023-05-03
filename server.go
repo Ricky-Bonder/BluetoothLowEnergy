@@ -47,60 +47,6 @@ func serve(adapterID string, deviceName string) error {
 		return err
 	}
 
-	char1, err := service1.NewChar("3344")
-	if err != nil {
-		return err
-	}
-
-	char1.Properties.Flags = []string{
-		gatt.FlagCharacteristicRead,
-		gatt.FlagCharacteristicWrite,
-	}
-
-	char1.OnRead(service.CharReadCallback(func(c *service.Char, options map[string]interface{}) ([]byte, error) {
-		log.Warnf("GOT READ REQUEST")
-		return []byte{42}, nil
-	}))
-
-	char1.OnWrite(service.CharWriteCallback(func(c *service.Char, value []byte) ([]byte, error) {
-		log.Warnf("GOT WRITE REQUEST")
-		return value, nil
-	}))
-
-	err = service1.AddChar(char1)
-	if err != nil {
-		return err
-	}
-
-	descr1, err := char1.NewDescr("4455")
-	if err != nil {
-		return err
-	}
-
-	descr1.Properties.Flags = []string{
-		gatt.FlagDescriptorRead,
-		gatt.FlagDescriptorWrite,
-	}
-
-	descr1.OnRead(service.DescrReadCallback(func(c *service.Descr, options map[string]interface{}) ([]byte, error) {
-		log.Warnf("GOT READ REQUEST")
-		return []byte{42}, nil
-	}))
-	descr1.OnWrite(service.DescrWriteCallback(func(d *service.Descr, value []byte) ([]byte, error) {
-		log.Warnf("GOT WRITE REQUEST")
-		return value, nil
-	}))
-
-	err = char1.AddDescr(descr1)
-	if err != nil {
-		return err
-	}
-
-	err = a.Run()
-	if err != nil {
-		return err
-	}
-
 	handshakeChar, err := service1.NewChar("6677")
 	if err != nil {
 		return err
@@ -108,8 +54,8 @@ func serve(adapterID string, deviceName string) error {
 
 	// define the flags for the characteristic
 	handshakeChar.Properties.Flags = []string{
-		gatt.FlagCharacteristicBroadcast,
-		gatt.FlagCharacteristicReliableWrite,
+		gatt.FlagCharacteristicRead,
+		gatt.FlagCharacteristicWrite,
 	}
 
 	// set the read and write callbacks for the characteristic
@@ -150,6 +96,35 @@ func serve(adapterID string, deviceName string) error {
 
 	log.Infof("Exposed service %s", service1.Properties.UUID)
 	log.Infof("Exposed characteristic: %s", handshakeChar.Properties.UUID)
+
+	descr1, err := handshakeChar.NewDescr("4455")
+	if err != nil {
+		return err
+	}
+
+	descr1.Properties.Flags = []string{
+		gatt.FlagDescriptorRead,
+		gatt.FlagDescriptorWrite,
+	}
+
+	descr1.OnRead(service.DescrReadCallback(func(c *service.Descr, options map[string]interface{}) ([]byte, error) {
+		log.Warnf("GOT READ REQUEST")
+		return []byte{42}, nil
+	}))
+	descr1.OnWrite(service.DescrWriteCallback(func(d *service.Descr, value []byte) ([]byte, error) {
+		log.Warnf("GOT WRITE REQUEST")
+		return value, nil
+	}))
+
+	err = handshakeChar.AddDescr(descr1)
+	if err != nil {
+		return err
+	}
+
+	err = a.Run()
+	if err != nil {
+		return err
+	}
 
 	timeout := uint32(6 * 3600) // 6h
 	log.Infof("Advertising for %ds...", timeout)

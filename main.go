@@ -15,6 +15,7 @@ func main() {
 	if err != nil {
 		log.Errorf("Failed to get hostname %s", err)
 	}
+	hostname = "RickBLETest"
 	err = Run(adapterID, hostname)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
