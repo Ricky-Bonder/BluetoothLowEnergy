@@ -3,6 +3,8 @@ package main
 import (
 	"time"
 
+	"encoding/base64"
+
 	"github.com/muka/go-bluetooth/api/service"
 	"github.com/muka/go-bluetooth/bluez/profile/agent"
 	"github.com/muka/go-bluetooth/bluez/profile/gatt"
@@ -99,7 +101,55 @@ func serve(adapterID string, deviceName string) error {
 		return err
 	}
 
+	handshakeChar, err := service1.NewChar("6677")
+	if err != nil {
+		return err
+	}
+
+	// define the flags for the characteristic
+	handshakeChar.Properties.Flags = []string{
+		gatt.FlagCharacteristicBroadcast,
+		gatt.FlagCharacteristicReliableWrite,
+	}
+
+	// set the read and write callbacks for the characteristic
+	handshakeChar.OnRead(service.CharReadCallback(func(c *service.Char, options map[string]interface{}) ([]byte, error) {
+		log.Warnf("GOT READ REQUEST")
+		return []byte{42}, nil
+	}))
+
+	handshakeChar.OnWrite(service.CharWriteCallback(func(c *service.Char, value []byte) ([]byte, error) {
+		log.Warnf("GOT WRITE REQUEST")
+		// Decode the encoded key using base64 decoding
+		decodedKey, err := base64.StdEncoding.DecodeString(string(value))
+		if err != nil {
+			log.Errorf("Error decoding key: %v", err)
+			return nil, err
+		}
+
+		log.Infof("decoded key: %s ", string(decodedKey))
+
+		// Use the decoded key to generate the shared key
+		// sharedKey, err := generateSharedKey(decodedKey)
+		// if err != nil {
+		// 	log.Errorf("Error generating shared key: %v", err)
+		// 	return nil, err
+		// }
+
+		// // Store the shared key in the server's state
+		// serverState.sharedKey = sharedKey
+
+		return nil, nil
+	}))
+
+	// add the characteristic to the service
+	err = service1.AddChar(handshakeChar)
+	if err != nil {
+		return err
+	}
+
 	log.Infof("Exposed service %s", service1.Properties.UUID)
+	log.Infof("Exposed characteristic: %s", handshakeChar.Properties.UUID)
 
 	timeout := uint32(6 * 3600) // 6h
 	log.Infof("Advertising for %ds...", timeout)
