@@ -85,6 +85,8 @@ func serve(adapterID string, deviceName string) error {
 		// // Store the shared key in the server's state
 		// serverState.sharedKey = sharedKey
 
+		privateKey, publicKey, err := GenerateKey()
+
 		return nil, nil
 	}))
 
