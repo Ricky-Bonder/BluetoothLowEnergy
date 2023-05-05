@@ -9,43 +9,41 @@ def device_sort(device):
     return device.address
 
 async def connect():
-    # try:
-    #      devices = await bleak.BleakScanner.discover()
-    # except bleak.exc.BleakDBusError as e:
-    #     if str(e) == '[org.bluez.Error.NotReady] Resource Not Ready':
-    #         raise RuntimeError('Bluetooth is not ready. Maybe try `bluetoothctl power on`?')
-    #     raise
-    # devices.sort(key=device_sort)
-    # print('==== BLE Discovery results ====')
-    # print('{0: >4} {1: <33} {2: <12}'.format(
-    #     'S.N.', 'Name', 'Address'))
-    # for i, _ in enumerate(devices):
-    #     print('[{0: >2}] {1: <33} {2: <12}'.format(i + 1, devices[i].name or 'Unknown', devices[i].address))
-
-    public_key = generate_key_pair()
-
-    public_key_bytes = public_key.public_bytes(
-        encoding = serialization.Encoding.Raw,
-        format = serialization.PublicFormat.Raw
-    )
-
-    public_key_base64 = base64.b64encode(public_key_bytes)
-
-    print(public_key_bytes)
-    print('Connecting...')
-    device = bleak.BleakClient('AC:82:47:1C:22:98', timeout=100)
+    ble_server = None
     KEY_EXCHANGE_CHAR_UUID = "12346677-0000-1000-8000-00805F9B34FB"
+
+    try:
+         devices = await bleak.BleakScanner.discover()
+    except bleak.exc.BleakDBusError as e:
+        if str(e) == '[org.bluez.Error.NotReady] Resource Not Ready':
+            raise RuntimeError('Bluetooth is not ready. Maybe try `bluetoothctl power on`?')
+        raise
+    devices.sort(key=device_sort)
+    print('==== BLE Discovery results ====')
+    print('{0: >4} {1: <33} {2: <12}'.format(
+        'S.N.', 'Name', 'Address'))
+    for i, _ in enumerate(devices):
+        print('[{0: >2}] {1: <33} {2: <12}'.format(i + 1, devices[i].name or 'Unknown', devices[i].address))
+        if devices[i].name == 'RickBLETest':
+            ble_server = devices[i].address
+            print('Found device of choice:',devices[i].name)
+
+
+
+    public_key_base64 = generate_key_pair()
+
+
+    print('Connecting...')
+    device = bleak.BleakClient(ble_server, timeout=100)
+    
     await device.connect()
     
-    time.sleep(1)
+
     print('Connected, writing public key in char...')
     await device.write_gatt_char(KEY_EXCHANGE_CHAR_UUID, public_key_base64)
 
-    print('DONE')
-    device.disconnect()
-    # services = await device.services
-    # for i, _ in enumerate(services):
-    #     print(services[i])
+    print('Written public key:', public_key_base64)
+    await device.disconnect()
 
 def generate_key_pair():
     # Generate a private key
@@ -55,20 +53,26 @@ def generate_key_pair():
     public_key = private_key.public_key()
 
     # Print the private and public keys in PEM format
-    print("Private key (PEM format):")
-    print(private_key.private_bytes(
-        encoding = serialization.Encoding.PEM,
-        format = serialization.PrivateFormat.PKCS8,
-        encryption_algorithm = serialization.NoEncryption()
-    ))
+    # print("Private key (PEM format):")
+    # print(private_key.private_bytes(
+    #     encoding = serialization.Encoding.PEM,
+    #     format = serialization.PrivateFormat.PKCS8,
+    #     encryption_algorithm = serialization.NoEncryption()
+    # ))
 
-    print("Public key (PEM format):")
-    print(public_key.public_bytes(
-        encoding = serialization.Encoding.PEM,
-        format = serialization.PublicFormat.SubjectPublicKeyInfo
-    ))
+    # print("Public key (PEM format):")
+    # print(public_key.public_bytes(
+    #     encoding = serialization.Encoding.PEM,
+    #     format = serialization.PublicFormat.SubjectPublicKeyInfo
+    # ))
 
-    return public_key
+    public_key_bytes = public_key.public_bytes(
+        encoding = serialization.Encoding.Raw,
+        format = serialization.PublicFormat.Raw
+    )
+    
+    # Returns the public key encoded to be written in the BLE characteristic
+    return base64.b64encode(public_key_bytes)
 
 async def main():
     await connect()
