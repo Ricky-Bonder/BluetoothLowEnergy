@@ -70,6 +70,13 @@ def generate_key_pair():
         encoding = serialization.Encoding.Raw,
         format = serialization.PublicFormat.Raw
     )
+
+
+    # Ensure the public key is 32 bytes by padding or truncating it
+    if len(public_key_bytes) < 32:
+        public_key_bytes += b'\x00' * (32 - len(public_key_bytes))
+    elif len(public_key_bytes) > 32:
+        public_key_bytes = public_key_bytes[:32]
     
     # Returns the public key encoded to be written in the BLE characteristic
     return base64.b64encode(public_key_bytes)
