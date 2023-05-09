@@ -13,8 +13,8 @@ import (
 /*
 GenerateKey generates a public private key pair using Curve25519.
 */
-func GenerateKey() (privateKey *[32]byte, publicKey *[32]byte, err error) {
-	var pub, priv [32]byte
+func GenerateKey(clientPublicKey *[32]byte) (privateKey *[32]byte, publicKey *[32]byte, err error) {
+	var priv [32]byte
 
 	_, err = io.ReadFull(rand.Reader, priv[:])
 	if err != nil {
@@ -25,15 +25,15 @@ func GenerateKey() (privateKey *[32]byte, publicKey *[32]byte, err error) {
 	priv[31] &= 127
 	priv[31] |= 64
 
-	curve25519.ScalarBaseMult(&pub, &priv)
+	curve25519.ScalarBaseMult(clientPublicKey, &priv)
 
-	return &priv, &pub, nil
+	return &priv, clientPublicKey, nil
 }
 
 /*
 GenerateSharedSecret generates the shared secret with a given public private key pair.
 */
-func GenerateSharedSecret(priv, pub []byte) []byte {
+func GenerateSharedSecretNoPop(priv, pub []byte) []byte {
 	var secret []byte
 
 	secret, _ = curve25519.X25519(priv, pub)
@@ -42,42 +42,25 @@ func GenerateSharedSecret(priv, pub []byte) []byte {
 
 }
 
-func GenerateKeyPair() []byte {
+func GenerateSharedSecretWithPoP(priv, pub, pop []byte) ([]byte, error) {
+	var secret []byte
 
-	privateKey := make([]byte, 32)
-	_, err := rand.Read(privateKey)
-	if err != nil {
-		log.Fatal(err)
+	secret, _ = curve25519.X25519(priv, pub)
+
+	// Hash PoP value using SHA256
+	popHash := sha256.Sum256(pop)
+
+	// XOR shared secret with hashed PoP value
+	for i := 0; i < 32; i++ {
+		secret[i] ^= popHash[i]
 	}
 
-	publicKey, err := curve25519.X25519(privateKey, curve25519.Basepoint)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	sharedSecret, err := curve25519.X25519(privateKey, publicKey)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return sharedSecret
+	return secret[:], nil
 }
 
-func ComputeSessionKey(sharedSecret []byte) (sessionKey []byte, error err) {
-
-	bytes, _ := GenarateRandomBytes()
-	pop := sha256.Sum256(bytes)
-	sessionKey, err := curve25519.X25519(sharedSecret, pop[:])
-	if err != nil {
-		log.Errorf("Error generating scalar multiplication for Session key: %v", err)
-		return nil, err
-	}
-	return sessionKey, nil
-}
-
-// Generate 16 random bytes
-func GenarateRandomBytes() (bytes []byte, err error) {
-	randomBytes := make([]byte, 16)
+// Generate 32 random bytes
+func GenarateInitializationVector() (bytes []byte, err error) {
+	randomBytes := make([]byte, 32)
 	if _, err := rand.Read(randomBytes); err != nil {
 		log.Errorf("Error generating random bytes: %v", err)
 		return nil, err

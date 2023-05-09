@@ -75,6 +75,9 @@ func serve(adapterID string, deviceName string) error {
 
 		log.Infof("decoded key: %s ", string(decodedKey))
 
+		var clientPublicKey [32]byte
+		copy(clientPublicKey[:], decodedKey)
+
 		// Use the decoded key to generate the shared key
 		// sharedKey, err := generateSharedKey(decodedKey)
 		// if err != nil {
@@ -85,8 +88,20 @@ func serve(adapterID string, deviceName string) error {
 		// // Store the shared key in the server's state
 		// serverState.sharedKey = sharedKey
 
-		privateKey, publicKey, err := GenerateKey()
+		_, publicKey, err := GenerateKey(&clientPublicKey)
+		if err != nil {
+			return nil, err
+		}
 
+		// Convert the public key to a []byte
+		publicKeyBytes := publicKey[:]
+
+		// send response to client
+
+		err = c.WriteValue(publicKeyBytes, nil)
+		if err != nil {
+			return nil, err
+		}
 		return nil, nil
 	}))
 
