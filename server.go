@@ -93,12 +93,20 @@ func serve(adapterID string, deviceName string) error {
 			return nil, err
 		}
 
+		IV, err := GenarateInitializationVector()
+		if err != nil {
+			return nil, err
+		}
+
+		//concat: S1, <base64(chiave pubblica)>,<base64(random)>
+		concatStr := "S1," + base64.RawStdEncoding.EncodeToString(publicKey[:]) + "," + base64.RawStdEncoding.EncodeToString(IV)
+
 		// Convert the public key to a []byte
-		publicKeyBytes := publicKey[:]
+		keyBytes := []byte(concatStr)
 
 		// send response to client
 
-		err = c.WriteValue(publicKeyBytes, nil)
+		err = c.WriteValue(keyBytes, nil)
 		if err != nil {
 			return nil, err
 		}
