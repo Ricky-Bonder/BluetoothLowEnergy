@@ -69,7 +69,7 @@ func serve(adapterID string, deviceName string) error {
 		// Decode the encoded key using base64 decoding
 		decodedKey, err := base64.StdEncoding.DecodeString(string(value))
 		if err != nil {
-			log.Errorf("Error decoding key: %v", err)
+			log.Errorf("Error: %v Decoding: %s ", err, string(value))
 			return nil, err
 		}
 
@@ -105,12 +105,8 @@ func serve(adapterID string, deviceName string) error {
 		keyBytes := []byte(concatStr)
 
 		// send response to client
-
-		err = c.WriteValue(keyBytes, nil)
-		if err != nil {
-			return nil, err
-		}
-		return nil, nil
+		log.Debug("keyBytes response: ", string(keyBytes))
+		return keyBytes, nil
 	}))
 
 	// add the characteristic to the service
