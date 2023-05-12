@@ -12,7 +12,7 @@ def device_sort(device):
 async def connect():
     global private_key
     ble_server = None
-    KEY_EXCHANGE_CHAR_UUID = "12346677-0000-1000-8000-00805F9B34FB"
+    KEY_EXCHANGE_CHAR_UUID = "12346677-0000-1000-8000-00805f9b34fb"
 
     try:
          devices = await bleak.BleakScanner.discover()
@@ -27,7 +27,7 @@ async def connect():
     for i, _ in enumerate(devices):
         print('[{0: >2}] {1: <33} {2: <12}'.format(i + 1, devices[i].name or 'Unknown', devices[i].address))
         if devices[i].name == 'RickBLETest':
-            ble_server = devices[i].address
+            ble_server = devices[i]
             print('Found device of choice:',devices[i].name)
 
 
@@ -43,19 +43,55 @@ async def connect():
     await device.connect()
 
     print('Connected, writing public key in char...')
-    await device.write_gatt_char(KEY_EXCHANGE_CHAR_UUID, handshake_data)
+    # await device.write_gatt_char(KEY_EXCHANGE_CHAR_UUID, handshake_data)
     
     # Subscribe to notifications from the characteristic
     async with bleak.BleakClient(ble_server) as device:
-        await device.start_notify(KEY_EXCHANGE_CHAR_UUID, handle_notification)  
-    # Wait for a notification from the characteristic
-    notification = await asyncio.wait_for(device.read_gatt_char(KEY_EXCHANGE_CHAR_UUID), timeout=5.0)
+        await device.is_connected()
+        for service in device.services:
+            print("[Service] {0}: {1}".format(service.uuid, service.description))
+            value = None
+            for char in service.characteristics:
+                if char.uuid == KEY_EXCHANGE_CHAR_UUID:
+                    print("found handshake char!")
+                    await device.start_notify(KEY_EXCHANGE_CHAR_UUID, handle_notification)
+                    
+                    if "write" in char.properties:
+                        try:
+                            value = bytes(await device.write_gatt_char(char.uuid, handshake_data, True))
+                        except Exception as e:
+                            value = str(e).encode()
+                    
+                    # await asyncio.sleep(5.0)    
+                    
+                    # if "read" in char.properties:
+                    #     try:
+                    #         value = bytes(await device.read_gatt_char(char.uuid))
+                    #     except Exception as e:
+                    #         value = str(e).encode()
+                            
+                            
+                    print("\t[Characteristic] {0}: (Handle: {1}) ({2}) | Name: {3}, Value: {4} ".format(
+                        char.uuid,
+                        char.handle,
+                        ",".join(char.properties),
+                        char.description,
+                        value
+                    ))
+                
+                    
+                    await asyncio.sleep(5.0)
+                    await device.stop_notify(KEY_EXCHANGE_CHAR_UUID)
+                    # Wait for a notification from the characteristic
+                    # notification = await asyncio.wait_for(device.write_gatt_char(KEY_EXCHANGE_CHAR_UUID), timeout=5.0)
         
-
+  
+    
     print('Written public key:', public_key_base64)
     await device.disconnect()
 
-async def handle_notification(sender, data):
+def handle_notification(sender, data):
+    print("received char notification:", str(data))
     # Split the notification data into a list of three items
     # Expected structure: S1,<base64(chiave pubblica)>,<base64(random)>
     handshake_structure = data.split(b",")
