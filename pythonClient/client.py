@@ -34,16 +34,16 @@ async def connect():
 
     public_key_base64 = generate_key_pair()
     
-    handshakeData = bytes("S0,", "utf-8") + public_key_base64
+    handshake_data = base64.b64encode(bytes("S0,", "utf-8") + public_key_base64)
 
 
     print('Connecting...')
-    device = bleak.BleakClient(ble_server, timeout=100)
+    device = bleak.BleakClient(ble_server, timeout=1000)
     
     await device.connect()
 
     print('Connected, writing public key in char...')
-    await device.write_gatt_char(KEY_EXCHANGE_CHAR_UUID, handshakeData)
+    await device.write_gatt_char(KEY_EXCHANGE_CHAR_UUID, handshake_data)
     
     # Subscribe to notifications from the characteristic
     async with bleak.BleakClient(ble_server) as device:
@@ -113,7 +113,7 @@ def generate_key_pair():
         public_key_bytes = public_key_bytes[:32]
     
     # Returns the public key encoded to be written in the BLE characteristic
-    return base64.b64encode(public_key_bytes)
+    return public_key_bytes
 
 async def main():
     await connect()
