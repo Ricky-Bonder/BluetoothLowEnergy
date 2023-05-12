@@ -56,6 +56,7 @@ func serve(adapterID string, deviceName string) error {
 	handshakeChar.Properties.Flags = []string{
 		gatt.FlagCharacteristicRead,
 		gatt.FlagCharacteristicWrite,
+		gatt.FlagCharacteristicNotify,
 	}
 
 	// set the read and write callbacks for the characteristic
