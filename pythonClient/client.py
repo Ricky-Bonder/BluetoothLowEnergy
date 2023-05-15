@@ -2,7 +2,9 @@ import bleak
 import asyncio
 from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X25519PublicKey
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
+import os
 
 
 private_key = None
@@ -108,15 +110,32 @@ def handle_notification(sender, data):
     shared_secret = X25519PrivateKey.generate(ahu_public_key)
     
     # Perform the XOR operation between the shared key and the SHA-256 digest
-    result = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
+    global session_key 
+    session_key = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
 
-    print(result)
+    print(session_key)
     
     
+def generate_AES_verification_token():
+    nonce = os.urandom(16)
+    
+    # Initialize the AES cipher in GCM mode with the session key and nonce
+    cipher = Cipher(algorithms.AES(session_key), modes.GCM(nonce))
+
+    # Generate a verification token by encrypting the client public key with the AES cipher
+    encryptor = cipher.encryptor()
+    ct = encryptor.update(public_key) + encryptor.finalize()
+    tag = encryptor.tag
+
+    # Concatenate the nonce and the ciphertext to create the verification token
+    verification_token = nonce + ct + tag
+
+    print(verification_token)
 
 def generate_key_pair():
     # Generate a private key
     global private_key
+    global public_key
     private_key = X25519PrivateKey.generate()
 
     # Derive the public key from the private key
