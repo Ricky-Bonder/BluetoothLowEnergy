@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"io"
 
 	"golang.org/x/crypto/curve25519"
@@ -13,6 +14,7 @@ import (
 var g_dev_pubkey [32]byte
 var g_dev_privkey [32]byte
 var g_randomBytes = make([]byte, 32)
+var g_shared_key = make([]byte, 0)
 
 /*
 GenerateKey generates a public private key pair using Curve25519.
@@ -45,7 +47,9 @@ func GenerateSharedSecretNoPop(priv, pub []byte) []byte {
 
 }
 
-func GenerateSharedSecretWithPoP(priv, pub, pop []byte) ([]byte, error) {
+func GenerateSharedSecretWithPoP(priv, pub, pop []byte) error {
+
+	fmt.Printf("priv: %s, pub: %s, pop: %s\n", string(priv), string(pub), string(pop))
 	var secret []byte
 
 	secret, _ = curve25519.X25519(priv, pub)
@@ -58,7 +62,9 @@ func GenerateSharedSecretWithPoP(priv, pub, pop []byte) ([]byte, error) {
 		secret[i] ^= popHash[i]
 	}
 
-	return secret[:], nil
+	g_shared_key = secret
+
+	return nil
 }
 
 // Generate 32 random bytes

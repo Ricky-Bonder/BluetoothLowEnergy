@@ -91,7 +91,6 @@ func serve(adapterID string, deviceName string) error {
 		log.Infof("decoded key: %s ", string(decodedKey))
 
 		clientPublicKey = [32]byte(decodedKey)
-		GenerateSharedSecretWithPoP(g_dev_privkey[:], clientPublicKey[:], g_randomBytes)
 
 		err = GenerateKey()
 		if err != nil {
@@ -102,6 +101,8 @@ func serve(adapterID string, deviceName string) error {
 		if err != nil {
 			return nil, err
 		}
+
+		GenerateSharedSecretWithPoP(g_dev_privkey[:], clientPublicKey[:], g_randomBytes)
 
 		//concat: S1, <base64(chiave pubblica)>,<base64(random)>
 		concatStr := "S1," + base64.RawStdEncoding.EncodeToString(g_dev_pubkey[:]) + "," + base64.RawStdEncoding.EncodeToString(g_randomBytes)
