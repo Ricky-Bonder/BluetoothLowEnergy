@@ -56,21 +56,28 @@ async def connect():
             for char in service.characteristics:
                 if char.uuid == KEY_EXCHANGE_CHAR_UUID:
                     print("found handshake char!")
-                    await device.start_notify(KEY_EXCHANGE_CHAR_UUID, handle_notification)
+                    # await device.start_notify(char.handle, handle_notification)
+                    
                     
                     if "write" in char.properties:
                         try:
-                            value = bytes(await device.write_gatt_char(char.uuid, handshake_data, True))
+                            value = bytes(await device.write_gatt_char(char.handle, handshake_data, True))
                         except Exception as e:
                             value = str(e).encode()
                     
-                    # await asyncio.sleep(5.0)    
+                    print("\t[Characteristic] {0}: (Handle: {1}) ({2})".format(
+                        char.uuid,
+                        char.handle,
+                        ",".join(char.properties)
+                    ))
                     
-                    # if "read" in char.properties:
-                    #     try:
-                    #         value = bytes(await device.read_gatt_char(char.uuid))
-                    #     except Exception as e:
-                    #         value = str(e).encode()
+                    await asyncio.sleep(0.1)    
+                    
+                    if "read" in char.properties:
+                        try:
+                            value = bytes(await device.read_gatt_char(char.handle))
+                        except Exception as e:
+                            value = str(e).encode()
                             
                             
                     print("\t[Characteristic] {0}: (Handle: {1}) ({2}) | Name: {3}, Value: {4} ".format(
@@ -82,8 +89,7 @@ async def connect():
                     ))
                 
                     
-                    await asyncio.sleep(5.0)
-                    await device.stop_notify(KEY_EXCHANGE_CHAR_UUID)
+                    # await device.stop_notify(char.handle)
                     # Wait for a notification from the characteristic
                     # notification = await asyncio.wait_for(device.write_gatt_char(KEY_EXCHANGE_CHAR_UUID), timeout=5.0)
         
@@ -93,13 +99,22 @@ async def connect():
     await device.disconnect()
 
 def handle_notification(sender, data):
-    print("received char notification:", str(data))
+    try:
+        decoded_string = base64.b64decode(data).decode('utf-8')
+        print("received char notification! Decoding with UTF-8:", decoded_string)   
+    except UnicodeDecodeError:
+        decoded_string = base64.b64decode(data).decode('latin-1')
+        print("received char notification! Decoding with latin-1:", decoded_string)   
+        
     # Split the notification data into a list of three items
     # Expected structure: S1,<base64(chiave pubblica)>,<base64(random)>
-    handshake_structure = data.split(b",")
+    handshake_structure = decoded_string.split(",")
     if len(handshake_structure) != 3:
         # Handle the case where the notification data is not in the expected format
+        print("len != 3, data:", decoded_string)
         return
+
+    print("len = 3, data:", decoded_string)
 
     # Decode the second and third items from base64
     ahu_public_key = base64.b64decode(handshake_structure[1]).decode()
