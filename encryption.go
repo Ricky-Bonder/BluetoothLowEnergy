@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"fmt"
 	"io"
 
 	"golang.org/x/crypto/curve25519"
@@ -10,24 +11,28 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var g_dev_pubkey [32]byte
+var g_dev_privkey [32]byte
+var g_randomBytes = make([]byte, 32)
+var g_shared_key = make([]byte, 0)
+
 /*
 GenerateKey generates a public private key pair using Curve25519.
 */
-func GenerateKey(clientPublicKey *[32]byte) (privateKey *[32]byte, publicKey *[32]byte, err error) {
-	var priv [32]byte
+func GenerateKey() error {
 
-	_, err = io.ReadFull(rand.Reader, priv[:])
+	_, err := io.ReadFull(rand.Reader, g_dev_privkey[:])
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
-	priv[0] &= 248
-	priv[31] &= 127
-	priv[31] |= 64
+	// @RO inutile?
+	// g_dev_privkey[0] &= 0xF8
+	// g_dev_privkey[31] &= 0x7F
+	// g_dev_privkey[31] |= 0x40
 
-	curve25519.ScalarBaseMult(clientPublicKey, &priv)
-
-	return &priv, clientPublicKey, nil
+	curve25519.ScalarBaseMult(&g_dev_pubkey, &g_dev_privkey)
+	return nil
 }
 
 /*
@@ -42,7 +47,9 @@ func GenerateSharedSecretNoPop(priv, pub []byte) []byte {
 
 }
 
-func GenerateSharedSecretWithPoP(priv, pub, pop []byte) ([]byte, error) {
+func GenerateSharedSecretWithPoP(priv, pub, pop []byte) error {
+
+	fmt.Printf("priv: %s, pub: %s, pop: %s\n", string(priv), string(pub), string(pop))
 	var secret []byte
 
 	secret, _ = curve25519.X25519(priv, pub)
@@ -55,15 +62,16 @@ func GenerateSharedSecretWithPoP(priv, pub, pop []byte) ([]byte, error) {
 		secret[i] ^= popHash[i]
 	}
 
-	return secret[:], nil
+	g_shared_key = secret
+
+	return nil
 }
 
 // Generate 32 random bytes
-func GenarateInitializationVector() (bytes []byte, err error) {
-	randomBytes := make([]byte, 32)
-	if _, err := rand.Read(randomBytes); err != nil {
+func GenarateInitializationVector() error {
+	if _, err := rand.Read(g_randomBytes); err != nil {
 		log.Errorf("Error generating random bytes: %v", err)
-		return nil, err
+		return err
 	}
-	return randomBytes, nil
+	return nil
 }

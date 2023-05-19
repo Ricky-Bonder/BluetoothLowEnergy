@@ -56,10 +56,12 @@ func serve(adapterID string, deviceName string) error {
 	handshakeChar.Properties.Flags = []string{
 		gatt.FlagCharacteristicRead,
 		gatt.FlagCharacteristicWrite,
+
 		//		gatt.FlagCharacteristicNotify,
 	}
 
 	var keyBytes []byte = make([]byte, 0)
+	var clientPublicKey [32]byte
 
 	// set the read and write callbacks for the characteristic
 	handshakeChar.OnRead(service.CharReadCallback(func(c *service.Char, options map[string]interface{}) ([]byte, error) {
@@ -88,21 +90,22 @@ func serve(adapterID string, deviceName string) error {
 
 		log.Infof("decoded key: %s ", string(decodedKey))
 
-		var clientPublicKey [32]byte
-		copy(clientPublicKey[:], decodedKey)
+		clientPublicKey = [32]byte(decodedKey)
 
-		_, publicKey, err := GenerateKey(&clientPublicKey)
+		err = GenerateKey()
 		if err != nil {
 			return nil, err
 		}
 
-		IV, err := GenarateInitializationVector()
+		err = GenarateInitializationVector()
 		if err != nil {
 			return nil, err
 		}
+
+		GenerateSharedSecretWithPoP(g_dev_privkey[:], clientPublicKey[:], g_randomBytes)
 
 		//concat: S1, <base64(chiave pubblica)>,<base64(random)>
-		concatStr := "S1," + base64.RawStdEncoding.EncodeToString(publicKey[:]) + "," + base64.RawStdEncoding.EncodeToString(IV)
+		concatStr := "S1," + base64.RawStdEncoding.EncodeToString(g_dev_pubkey[:]) + "," + base64.RawStdEncoding.EncodeToString(g_randomBytes)
 
 		// Convert the public key to a []byte
 		keyBytes = []byte(concatStr)

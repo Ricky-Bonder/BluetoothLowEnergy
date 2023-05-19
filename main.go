@@ -1,21 +1,20 @@
 package main
 
 import (
+	"errors"
 	"os"
-	"time"
 
 	"github.com/muka/go-bluetooth/hw"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	time.Sleep(10 * time.Second)
 	adapterID := "hci0"
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Errorf("Failed to get hostname %s", err)
 	}
-	hostname = "RickBLETest"
+	hostname = "RickBLETest" // @RO solo per test
 	err = Run(adapterID, hostname)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
@@ -33,11 +32,13 @@ func Run(adapterID string, deviceName string) error {
 
 	if deviceName == "" {
 		log.Fatal("Device name is required")
+		return errors.New("Device name is required")
 	}
 
 	err := serve(adapterID, deviceName)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
+		return err
 	}
 
 	// set LE mode
