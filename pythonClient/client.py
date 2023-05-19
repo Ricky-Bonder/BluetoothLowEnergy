@@ -5,7 +5,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
 import os
-
+import time
 
 private_key = None
 def device_sort(device):
@@ -55,13 +55,12 @@ async def connect():
             value = None
             for char in service.characteristics:
                 if char.uuid == KEY_EXCHANGE_CHAR_UUID:
-                    print("found handshake char!")
-                    # await device.start_notify(char.handle, handle_notification)
-                    
+                    print("found handshake char!")                    
                     
                     if "write" in char.properties:
                         try:
                             value = bytes(await device.write_gatt_char(char.handle, handshake_data, True))
+                            print('Written public key:', public_key_base64)
                         except Exception as e:
                             value = str(e).encode()
                     
@@ -70,65 +69,69 @@ async def connect():
                         char.handle,
                         ",".join(char.properties)
                     ))
+
+                    server_response = bytes()
                     
-                    await asyncio.sleep(0.1)    
+                    timeout = time.time() + 10  # 10 seconds from now
+                    max_retries = 5
+                    while True:
+                        await asyncio.sleep(0.1)    
                     
-                    if "read" in char.properties:
-                        try:
-                            value = bytes(await device.read_gatt_char(char.handle))
-                        except Exception as e:
-                            value = str(e).encode()
-                            
-                            
-                    print("\t[Characteristic] {0}: (Handle: {1}) ({2}) | Name: {3}, Value: {4} ".format(
-                        char.uuid,
-                        char.handle,
-                        ",".join(char.properties),
-                        char.description,
-                        value
-                    ))
-                
-                    
-                    # await device.stop_notify(char.handle)
-                    # Wait for a notification from the characteristic
-                    # notification = await asyncio.wait_for(device.write_gatt_char(KEY_EXCHANGE_CHAR_UUID), timeout=5.0)
-        
-  
+                        if "read" in char.properties:
+                            try:
+                                server_response = bytes(await device.read_gatt_char(char.handle))
+                            except Exception as e:
+                                server_response = str(e).encode()   
+                                                     
+                        if server_response != bytes() or max_retries == 0 or time.time() > timeout:
+                            break
+                        max_retries = max_retries - 1
+
+                    if server_response != bytes(): 
+                        print("\t[Characteristic] {0}: (Handle: {1}) ({2}) | Name: {3}, Value: {4} ".format(
+                            char.uuid,
+                            char.handle,
+                            ",".join(char.properties),
+                            char.description,
+                            server_response
+                        ))
+                        handle_server_response(server_response)
+                        
     
-    print('Written public key:', public_key_base64)
     await device.disconnect()
 
-def handle_notification(sender, data):
+def handle_server_response(data):
     try:
         decoded_string = base64.b64decode(data).decode('utf-8')
-        print("received char notification! Decoding with UTF-8:", decoded_string)   
+        print("received data from server! Decoding with UTF-8:", decoded_string)   
     except UnicodeDecodeError:
         decoded_string = base64.b64decode(data).decode('latin-1')
-        print("received char notification! Decoding with latin-1:", decoded_string)   
+        print("received data from server! Decoding with latin-1:", decoded_string)   
         
     # Split the notification data into a list of three items
-    # Expected structure: S1,<base64(chiave pubblica)>,<base64(random)>
+    # Expected structure: S1,<base64(server_public_key)>,<base64(random)>
     handshake_structure = decoded_string.split(",")
     if len(handshake_structure) != 3:
         # Handle the case where the notification data is not in the expected format
         print("len != 3, data:", decoded_string)
         return
 
-    print("len = 3, data:", decoded_string)
+    print("parsed data correctly:", decoded_string)
 
     # Decode the second and third items from base64
     ahu_public_key = base64.b64decode(handshake_structure[1]).decode()
     ahu_random_iv = base64.b64decode(handshake_structure[2]).decode()
     
-    X25519PublicKey.from_public_bytes(ahu_public_key)
-    # WIP: i want to call the following on my private_key, not the class ??
-    shared_secret = X25519PrivateKey.generate(ahu_public_key)
+#    X25519PublicKey.from_public_bytes(ahu_public_key) //useless??
+    private_key = X25519PrivateKey.generate()
+    public_key = private_key.public_key()
+    shared_secret = private_key.exchange(public_key)
     
     # Perform the XOR operation between the shared key and the SHA-256 digest
     global session_key 
     session_key = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
 
-    print(session_key)
+    print("generated session key:",session_key)
     
     
 def generate_AES_verification_token():
