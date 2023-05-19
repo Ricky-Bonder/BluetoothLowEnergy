@@ -70,22 +70,7 @@ async def connect():
                         ",".join(char.properties)
                     ))
 
-                    server_response = bytes()
-                    
-                    timeout = time.time() + 10  # 10 seconds from now
-                    max_retries = 5
-                    while True:
-                        await asyncio.sleep(0.1)    
-                    
-                        if "read" in char.properties:
-                            try:
-                                server_response = bytes(await device.read_gatt_char(char.handle))
-                            except Exception as e:
-                                server_response = str(e).encode()   
-                                                     
-                        if server_response != bytes() or max_retries == 0 or time.time() > timeout:
-                            break
-                        max_retries = max_retries - 1
+                    server_response = read_server_response(device, char)
 
                     if server_response != bytes(): 
                         print("\t[Characteristic] {0}: (Handle: {1}) ({2}) | Name: {3}, Value: {4} ".format(
@@ -95,10 +80,39 @@ async def connect():
                             char.description,
                             server_response
                         ))
-                        handle_server_response(server_response)
+                        client_session_key = handle_server_response(server_response)
+                        client_session_key = base64.b64encode(bytes("S2,", "utf-8") + client_session_key)
+                        try:
+                            value = bytes(await device.write_gatt_char(char.handle, client_session_key, False))
+                            print('Written session key:', public_key_base64)
+                        except Exception as e:
+                            value = str(e).encode()
                         
-    
+                        # read S3 server response
+                        server_response = read_server_response(device, char)
+
     await device.disconnect()
+    
+    
+async def read_server_response(device, char):
+    server_response = bytes()          
+    timeout = time.time() + 10  # 10 seconds from now
+    max_retries = 5
+    while True:
+        await asyncio.sleep(0.1)    
+    
+        if "read" in char.properties:
+            try:
+                server_response = bytes(await device.read_gatt_char(char.handle))
+                return server_response
+            except Exception as e:
+                server_response = str(e).encode()
+                return
+                                        
+        if server_response != bytes() or max_retries == 0 or time.time() > timeout:
+            break
+        max_retries = max_retries - 1
+    return
 
 def handle_server_response(data):
     try:
@@ -132,6 +146,7 @@ def handle_server_response(data):
     session_key = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
 
     print("generated session key:",session_key)
+    return session_key
     
     
 def generate_AES_verification_token():
