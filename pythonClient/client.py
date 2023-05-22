@@ -7,12 +7,16 @@ import base64
 import os
 import time
 
-private_key = None
+g_private_key = None
+g_private_key = None
+# global g_session_key
+g_verification_token = None
+
 def device_sort(device):
     return device.address
 
 async def connect():
-    global private_key
+
     ble_server = None
     KEY_EXCHANGE_CHAR_UUID = "12346677-0000-1000-8000-00805f9b34fb"
 
@@ -70,7 +74,7 @@ async def connect():
                         ",".join(char.properties)
                     ))
 
-                    server_response = read_server_response(device, char)
+                    server_response = bytes(await read_server_response(device, char))
 
                     if server_response != bytes(): 
                         print("\t[Characteristic] {0}: (Handle: {1}) ({2}) | Name: {3}, Value: {4} ".format(
@@ -78,18 +82,22 @@ async def connect():
                             char.handle,
                             ",".join(char.properties),
                             char.description,
-                            server_response
+                            str(server_response)
                         ))
-                        client_session_key = handle_server_response(server_response)
-                        client_session_key = base64.b64encode(bytes("S2,", "utf-8") + client_session_key)
+                        
+                        generate_session_key(server_response)
+                        
+                        
+                        encoded_verification_token = base64.b64encode(bytes("S2,", "utf-8") + generate_AES_verification_token())
                         try:
-                            value = bytes(await device.write_gatt_char(char.handle, client_session_key, False))
-                            print('Written session key:', public_key_base64)
+                            value = bytes(await device.write_gatt_char(char.handle, encoded_verification_token, False))
+                            print('Written verification token:', encoded_verification_token)
                         except Exception as e:
                             value = str(e).encode()
                         
                         # read S3 server response
-                        server_response = read_server_response(device, char)
+                        server_response = bytes(await read_server_response(device, char))
+                        print("S3 received: ",str(server_response))
 
     await device.disconnect()
     
@@ -114,46 +122,48 @@ async def read_server_response(device, char):
         max_retries = max_retries - 1
     return
 
-def handle_server_response(data):
-    try:
-        decoded_string = base64.b64decode(data).decode('utf-8')
-        print("received data from server! Decoding with UTF-8:", decoded_string)   
-    except UnicodeDecodeError:
-        decoded_string = base64.b64decode(data).decode('latin-1')
-        print("received data from server! Decoding with latin-1:", decoded_string)   
+def generate_session_key(data):
+    global g_session_key
+    handshake_structure = str(data).split(",")
+    s1 = handshake_structure[0]
+    s1 = s1[2:]
+    server_pub_key = handshake_structure[1]
+    pop = handshake_structure[2]
+    pop = pop[:-1]
+    print("@@@", s1, server_pub_key, pop)
+    # decoded_string = base64.b64decode(data).decode('utf-8','ignore')
+    # print("received data from server! Decoding with UTF-8:", decoded_string)   
+
+    print("received data from server! Decoding with str:", handshake_structure)   
+    # decoded_string = str(data.split(","))
         
     # Split the notification data into a list of three items
     # Expected structure: S1,<base64(server_public_key)>,<base64(random)>
-    handshake_structure = decoded_string.split(",")
     if len(handshake_structure) != 3:
         # Handle the case where the notification data is not in the expected format
-        print("len != 3, data:", decoded_string)
+        print("len != 3, data:", str(data))
         return
-
-    print("parsed data correctly:", decoded_string)
-
+    
     # Decode the second and third items from base64
-    ahu_public_key = base64.b64decode(handshake_structure[1]).decode()
-    ahu_random_iv = base64.b64decode(handshake_structure[2]).decode()
+    ahu_public_key = base64.b64decode(server_pub_key)
+    ahu_random_iv = base64.b64decode(pop)
     
 #    X25519PublicKey.from_public_bytes(ahu_public_key) //useless??
     private_key = X25519PrivateKey.generate()
     public_key = private_key.public_key()
     shared_secret = private_key.exchange(public_key)
     
-    # Perform the XOR operation between the shared key and the SHA-256 digest
-    global session_key 
-    session_key = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
+    # Perform the XOR operation between the shared key and the SHA-256 digest 
+    g_session_key = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
 
-    print("generated session key:",session_key)
-    return session_key
+    print("generated session key:",g_session_key)
     
     
 def generate_AES_verification_token():
+    global g_session_key
     nonce = os.urandom(16)
-    
     # Initialize the AES cipher in GCM mode with the session key and nonce
-    cipher = Cipher(algorithms.AES(session_key), modes.GCM(nonce))
+    cipher = Cipher(algorithms.AES(g_session_key), modes.GCM(nonce))
 
     # Generate a verification token by encrypting the client public key with the AES cipher
     encryptor = cipher.encryptor()
@@ -161,18 +171,18 @@ def generate_AES_verification_token():
     tag = encryptor.tag
 
     # Concatenate the nonce and the ciphertext to create the verification token
-    verification_token = nonce + ct + tag
-
-    print(verification_token)
+    g_verification_token = nonce + ct + tag
+    print("Verification token: ",g_verification_token)
+    return g_verification_token
 
 def generate_key_pair():
     # Generate a private key
-    global private_key
+    global g_private_key
     global public_key
-    private_key = X25519PrivateKey.generate()
+    g_private_key = X25519PrivateKey.generate()
 
     # Derive the public key from the private key
-    public_key = private_key.public_key()
+    public_key = g_private_key.public_key()
 
     # Print the private and public keys in PEM format
     # print("Private key (PEM format):")
