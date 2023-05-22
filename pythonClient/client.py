@@ -7,7 +7,7 @@ import base64
 import os
 import time
 from Crypto.Cipher import AES
-from Crypto.Cipher import Counter
+from Crypto.Util import Counter
 
 g_private_key = None
 g_private_key = None
@@ -167,7 +167,7 @@ def generate_aes_verification_token():
     client_token_verify = aes_ctr_encrypt(g_session_key, ahu_public_key, ahu_random_iv)
     
     print("Verification token: ",client_token_verify)
-    return g_verification_token
+    return client_token_verify
 
 def generate_key_pair():
     # Generate a private key
