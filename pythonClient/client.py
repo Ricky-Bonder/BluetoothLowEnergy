@@ -138,10 +138,10 @@ def generate_session_key(data):
     ahu_public_key = base64.b64decode(server_pub_key)
     ahu_random_iv = base64.b64decode(pop)
     
-#    X25519PublicKey.from_public_bytes(ahu_public_key) //useless??
+   
     private_key = X25519PrivateKey.generate()
-    #public_key = private_key.public_key()
-    shared_secret = private_key.exchange(ahu_public_key)
+    # public_key = private_key.public_key()
+    shared_secret = private_key.exchange(X25519PublicKey.from_public_bytes(ahu_public_key))
     
     # Perform the XOR operation between the shared key and the SHA-256 digest 
     g_session_key = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
