@@ -86,22 +86,16 @@ func decryptToken(token []byte, sessionKey []byte) ([]byte, error) {
 	}
 
 	// Create a new AES-GCM mode cipher with the block
-	aesgcm, err := cipher.NewGCM(block)
+	aesctr := cipher.NewCTR(block, g_randomBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	// Nonce size must be unique for every encryption, but doesn't need to be secret
-	nonceSize := aesgcm.NonceSize()
-	if len(token) < nonceSize {
-		return nil, fmt.Errorf("invalid token")
-	}
-
-	// Extract the nonce from the token
-	nonce := token[:nonceSize]
-
+	var dst []byte = make([]byte, 0)
 	// Decrypt the token using AES-GCM
-	decrypted, err := aesgcm.Open(nil, nonce, token[nonceSize:], nil)
+	// decrypted, err := aesctr.XORKeyStream(dst, token)
+	// decrypted, err := aesctr.Open(nil, nonce, token[nonceSize:], nil)
+
 	if err != nil {
 		return nil, err
 	}

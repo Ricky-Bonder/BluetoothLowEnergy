@@ -84,22 +84,22 @@ func serve(adapterID string, deviceName string) error {
 	handshakeChar.OnWrite(service.CharWriteCallback(func(c *service.Char, value []byte) ([]byte, error) {
 		log.Warnf("GOT WRITE REQUEST")
 		// Decode the encoded key using base64 decoding
-		decodedKey, err := base64.StdEncoding.DecodeString(string(value))
+		decodedData, err := base64.StdEncoding.DecodeString(string(value))
 		if err != nil {
 			log.Errorf("Error: %v Decoding: %s ", err, string(value))
 			return nil, err
 		}
 
-		log.Infof("decoded key: %s ", string(decodedKey))
+		log.Infof("decoded key: %s ", string(decodedData))
 
-		parsedMessage := strings.Split(string(decodedKey), ",")
+		parsedMessage := strings.SplitN(string(decodedData), ",", 2)
 
 		if strings.Contains(parsedMessage[0], "S0") {
 			log.Debug("Decoding client's message S0")
-			return decodeS0(decodedKey)
+			return decodeS0([]byte(parsedMessage[1]))
 		} else if strings.Contains(parsedMessage[0], "S2") {
 			log.Debug("Decoding client's message S2")
-			return decodeS2(decodedKey)
+			return decodeS2([]byte(parsedMessage[1]))
 		} else {
 			return nil, err
 		}
@@ -194,10 +194,10 @@ func decodeS0(receivedMessage []byte) ([]byte, error) {
 }
 
 func decodeS2(receivedMessage []byte) ([]byte, error) {
-	decodedToken := []byte(receivedMessage)
+	log.Debug("@@@ bytes:", string(receivedMessage))
 
 	// Decrypt the token using the session key
-	decryptedToken, err := decryptToken(decodedToken, g_session_key)
+	decryptedToken, err := decryptToken(receivedMessage, g_session_key)
 	if err != nil {
 		log.Error("Failed to decrypt the token:", err)
 		return nil, err
