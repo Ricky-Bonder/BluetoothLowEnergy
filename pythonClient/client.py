@@ -6,6 +6,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
 import os
 import time
+from Crypto.Cipher import AES
+from Crypto.Cipher import Counter
 
 g_private_key = None
 g_private_key = None
@@ -119,6 +121,8 @@ async def read_server_response(device, char):
 
 def generate_session_key(data):
     global g_session_key
+    global ahu_public_key
+    global ahu_random_iv
     handshake_structure = str(data).split(",")
     s1 = handshake_structure[0]
     s1 = s1[2:]
@@ -149,21 +153,20 @@ def generate_session_key(data):
     print("generated session key:",g_session_key)
     
     
+def aes_ctr_encrypt(key, data, nonce):
+    ctr = Counter.new(128, initial_value=int.from_bytes(nonce, byteorder='big'))
+    aes = AES.new(key, AES.MODE_CTR, counter=ctr)
+    return aes.encrypt(data)
+    
 def generate_aes_verification_token():
     global g_session_key
-    global public_key
-    nonce = os.urandom(16)
-    # Initialize the AES cipher in GCM mode with the session key and nonce
-    cipher = Cipher(algorithms.AES(g_session_key), modes.GCM(nonce))
+    global ahu_public_key
+    global ahu_random_iv
 
-    # Generate a verification token by encrypting the client public key with the AES cipher
-    encryptor = cipher.encryptor()
-    ct = encryptor.update(public_key) + encryptor.finalize()
-    tag = encryptor.tag
-
-    # Concatenate the nonce and the ciphertext to create the verification token
-    g_verification_token = nonce + ct + tag
-    print("Verification token: ",g_verification_token)
+    # Generate a verification token by encrypting the client public key with the AES ciphe
+    client_token_verify = aes_ctr_encrypt(g_session_key, ahu_public_key, ahu_random_iv)
+    
+    print("Verification token: ",client_token_verify)
     return g_verification_token
 
 def generate_key_pair():
