@@ -9,14 +9,12 @@ import time
 
 g_private_key = None
 g_private_key = None
-# global g_session_key
 g_verification_token = None
 
 def device_sort(device):
     return device.address
 
 async def connect():
-
     ble_server = None
     KEY_EXCHANGE_CHAR_UUID = "12346677-0000-1000-8000-00805f9b34fb"
 
@@ -56,17 +54,16 @@ async def connect():
         await device.is_connected()
         for service in device.services:
             print("[Service] {0}: {1}".format(service.uuid, service.description))
-            value = None
             for char in service.characteristics:
                 if char.uuid == KEY_EXCHANGE_CHAR_UUID:
                     print("found handshake char!")                    
                     
                     if "write" in char.properties:
                         try:
-                            value = bytes(await device.write_gatt_char(char.handle, handshake_data, True))
+                            await device.write_gatt_char(char.handle, handshake_data, True)
                             print('Written public key:', public_key_base64)
                         except Exception as e:
-                            value = str(e).encode()
+                            print(str(e).encode())
                     
                     print("\t[Characteristic] {0}: (Handle: {1}) ({2})".format(
                         char.uuid,
@@ -87,13 +84,12 @@ async def connect():
                         
                         generate_session_key(server_response)
                         
-                        
-                        encoded_verification_token = base64.b64encode(bytes("S2,", "utf-8") + generate_AES_verification_token())
+                        encoded_verification_token = base64.b64encode(bytes("S2,", "utf-8") + generate_aes_verification_token())
                         try:
-                            value = bytes(await device.write_gatt_char(char.handle, encoded_verification_token, False))
+                            await device.write_gatt_char(char.handle, encoded_verification_token, False)
                             print('Written verification token:', encoded_verification_token)
                         except Exception as e:
-                            value = str(e).encode()
+                            print(str(e).encode())
                         
                         # read S3 server response
                         server_response = bytes(await read_server_response(device, char))
@@ -120,7 +116,6 @@ async def read_server_response(device, char):
         if server_response != bytes() or max_retries == 0 or time.time() > timeout:
             break
         max_retries = max_retries - 1
-    return
 
 def generate_session_key(data):
     global g_session_key
@@ -130,12 +125,7 @@ def generate_session_key(data):
     server_pub_key = handshake_structure[1]
     pop = handshake_structure[2]
     pop = pop[:-1]
-    print("@@@", s1, server_pub_key, pop)
-    # decoded_string = base64.b64decode(data).decode('utf-8','ignore')
-    # print("received data from server! Decoding with UTF-8:", decoded_string)   
-
-    print("received data from server! Decoding with str:", handshake_structure)   
-    # decoded_string = str(data.split(","))
+    print("decoded handshake structure", s1, server_pub_key, pop)
         
     # Split the notification data into a list of three items
     # Expected structure: S1,<base64(server_public_key)>,<base64(random)>
@@ -150,8 +140,8 @@ def generate_session_key(data):
     
 #    X25519PublicKey.from_public_bytes(ahu_public_key) //useless??
     private_key = X25519PrivateKey.generate()
-    public_key = private_key.public_key()
-    shared_secret = private_key.exchange(public_key)
+    #public_key = private_key.public_key()
+    shared_secret = private_key.exchange(ahu_public_key)
     
     # Perform the XOR operation between the shared key and the SHA-256 digest 
     g_session_key = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
@@ -159,8 +149,9 @@ def generate_session_key(data):
     print("generated session key:",g_session_key)
     
     
-def generate_AES_verification_token():
+def generate_aes_verification_token():
     global g_session_key
+    global public_key
     nonce = os.urandom(16)
     # Initialize the AES cipher in GCM mode with the session key and nonce
     cipher = Cipher(algorithms.AES(g_session_key), modes.GCM(nonce))
