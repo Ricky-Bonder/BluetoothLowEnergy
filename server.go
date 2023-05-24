@@ -16,6 +16,8 @@ import (
 var keyBytes []byte = make([]byte, 0)
 var clientPublicKey [32]byte
 
+var PoP string = "e93Y9eeQWAx00mxL6pxN3YKEyv00XjgG6V06lulibH8p7bvboo9hg9zkNivG8oWB6Qjd335Q6Bu0h9XLspQc5ak7RW6LMVG78jT0Rq49pt6fRvUt5KgaAJ5kPqyn4z4PQrw30t23Nbs15WUQ110"
+
 func serve(adapterID string, deviceName string) error {
 
 	options := service.AppOptions{
@@ -176,7 +178,7 @@ func decodeS0(receivedMessage []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	GenerateSharedSecretWithPoP(g_dev_privkey[:], clientPublicKey[:], g_randomBytes)
+	GenerateSharedSecretWithPoP(g_dev_privkey[:], clientPublicKey[:], PoP)
 
 	//concat: S1, <base64(chiave pubblica)>,<base64(random)>
 	concatStr :=
@@ -202,15 +204,15 @@ func decodeS2(receivedMessage []byte) ([]byte, error) {
 		log.Error("Failed to decrypt the token:", err)
 		return nil, err
 	}
-
-	if len(clientPublicKey) == len(decryptedToken) {
-		if bytes.Equal(clientPublicKey[:], decryptedToken) {
-			log.Debug("Token decryption successful. Client public key verified.")
+	log.Debug("@@@ DECRYPTED AHU PUB KEY FROM CLIENT:", string(decryptedToken))
+	if len(g_dev_pubkey) == len(decryptedToken) {
+		if bytes.Equal(g_dev_pubkey[:], decryptedToken) {
+			log.Debug("Token decryption successful. Confirmed the AHU public key.")
 		} else {
-			log.Error("Client Public Key and Decrypted AES Token contain different bytes.")
+			log.Error("AHU Public Key and Decrypted AES Token contain different bytes.")
 		}
 	} else {
-		log.Error("Client Public Key and Decrypted AES Token have different lenghts.")
+		log.Error("AHU Public Key and Decrypted AES Token have different lenghts.")
 	}
 
 	return decryptedToken, nil

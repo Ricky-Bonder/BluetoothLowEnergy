@@ -15,7 +15,7 @@ import (
 
 var g_dev_pubkey [32]byte
 var g_dev_privkey [32]byte
-var g_randomBytes = make([]byte, 32)
+var g_randomBytes = make([]byte, 16)
 var g_session_key = make([]byte, 0)
 
 /*
@@ -49,7 +49,7 @@ func GenerateSharedSecretNoPop(priv, pub []byte) []byte {
 
 }
 
-func GenerateSharedSecretWithPoP(priv, pub, pop []byte) error {
+func GenerateSharedSecretWithPoP(priv, pub []byte, pop string) error {
 
 	fmt.Printf("priv: %s, pub: %s, pop: %s\n", string(priv), string(pub), string(pop))
 	var secret []byte
@@ -57,7 +57,7 @@ func GenerateSharedSecretWithPoP(priv, pub, pop []byte) error {
 	secret, _ = curve25519.X25519(priv, pub)
 
 	// Hash PoP value using SHA256
-	popHash := sha256.Sum256(pop)
+	popHash := sha256.Sum256([]byte(pop))
 
 	// XOR shared secret with hashed PoP value
 	for i := 0; i < 32; i++ {
@@ -85,20 +85,19 @@ func decryptToken(token []byte, sessionKey []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	// Create a new AES-GCM mode cipher with the block
+	log.Debug("block size: ", block.BlockSize(), " - iv: ", len(g_randomBytes))
+
+	// Create a new AES-CTR mode cipher with the block
 	aesctr := cipher.NewCTR(block, g_randomBytes)
 	if err != nil {
 		return nil, err
 	}
 
 	var dst []byte = make([]byte, 0)
-	// Decrypt the token using AES-GCM
+	// DECRYPT DATA
+	aesctr.XORKeyStream(dst, token)
 	// decrypted, err := aesctr.XORKeyStream(dst, token)
 	// decrypted, err := aesctr.Open(nil, nonce, token[nonceSize:], nil)
 
-	if err != nil {
-		return nil, err
-	}
-
-	return decrypted, nil
+	return dst, nil
 }
