@@ -4,7 +4,7 @@ from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey, X
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 import base64
-import os
+import hashlib
 import time
 from Crypto.Cipher import AES
 from Crypto.Util import Counter
@@ -12,6 +12,8 @@ from Crypto.Util import Counter
 g_private_key = None
 g_private_key = None
 g_verification_token = None
+
+g_PoP = "e93Y9eeQWAx00mxL6pxN3YKEyv00XjgG6V06lulibH8p7bvboo9hg9zkNivG8oWB6Qjd335Q6Bu0h9XLspQc5ak7RW6LMVG78jT0Rq49pt6fRvUt5KgaAJ5kPqyn4z4PQrw30t23Nbs15WUQ110"
 
 def device_sort(device):
     return device.address
@@ -127,9 +129,9 @@ def generate_session_key(data):
     s1 = handshake_structure[0]
     s1 = s1[2:]
     server_pub_key = handshake_structure[1]
-    pop = handshake_structure[2]
-    pop = pop[:-1]
-    print("decoded handshake structure", s1, server_pub_key, pop)
+    nonce = handshake_structure[2]
+    nonce = nonce[:-1]
+    print("decoded handshake structure", s1, server_pub_key, nonce)
         
     # Split the notification data into a list of three items
     # Expected structure: S1,<base64(server_public_key)>,<base64(random)>
@@ -140,21 +142,25 @@ def generate_session_key(data):
     
     # Decode the second and third items from base64
     ahu_public_key = base64.b64decode(server_pub_key)
-    ahu_random_iv = base64.b64decode(pop)
+    ahu_random_iv = base64.b64decode(nonce)
     
    
     private_key = X25519PrivateKey.generate()
     # public_key = private_key.public_key()
     shared_secret = private_key.exchange(X25519PublicKey.from_public_bytes(ahu_public_key))
     
+    # encode pop as SHA256(PoP)
+    sha_pop = hashlib.sha256(g_PoP.encode()).digest()
+
     # Perform the XOR operation between the shared key and the SHA-256 digest 
-    g_session_key = bytes([x ^ y for x, y in zip(shared_secret, ahu_random_iv)])
+    g_session_key = bytes([x ^ y for x, y in zip(shared_secret, sha_pop)])
 
     print("generated session key:",g_session_key)
     
     
 def aes_ctr_encrypt(key, data, nonce):
     ctr = Counter.new(128, initial_value=int.from_bytes(nonce, byteorder='big'))
+    print("key: ", len(key), "nonce: ",len(nonce), "ctr: ", ctr)
     aes = AES.new(key, AES.MODE_CTR, counter=ctr)
     return aes.encrypt(data)
     
