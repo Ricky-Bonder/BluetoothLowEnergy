@@ -5,6 +5,7 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"io"
 
@@ -78,7 +79,7 @@ func GenarateInitializationVector() error {
 	return nil
 }
 
-func decryptToken(token []byte, sessionKey []byte) ([]byte, error) {
+func decryptToken(cipherTextByte []byte, sessionKey []byte) ([]byte, error) {
 	// Create a new AES cipher block
 	block, err := aes.NewCipher(sessionKey)
 	if err != nil {
@@ -93,11 +94,30 @@ func decryptToken(token []byte, sessionKey []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	var dst []byte = make([]byte, 0)
+	var dstPlainTextByte []byte = make([]byte, 0)
 	// DECRYPT DATA
-	aesctr.XORKeyStream(dst, token)
-	// decrypted, err := aesctr.XORKeyStream(dst, token)
-	// decrypted, err := aesctr.Open(nil, nonce, token[nonceSize:], nil)
+	aesctr.XORKeyStream(dstPlainTextByte, cipherTextByte)
+	return dstPlainTextByte, nil
+}
 
-	return dst, nil
+func encryptToken2(plainTextByte []byte, sessionKey []byte, nonce []byte) (string, error) {
+	// GET CIPHER BLOCK USING KEY
+	block, err := aes.NewCipher(sessionKey)
+	if err != nil {
+		return "", err
+	}
+
+	// GET CTR
+	aesctr := cipher.NewCTR(block, nonce)
+	if err != nil {
+		return "", err
+	}
+
+	var dstCipherTextByte []byte = make([]byte, 0)
+	// ENCRYPT DATA
+	aesctr.XORKeyStream(dstCipherTextByte, plainTextByte)
+
+	// RETURN String Base64 encoded
+	cipherText := "S3," + base64.StdEncoding.EncodeToString(dstCipherTextByte)
+	return cipherText, nil
 }

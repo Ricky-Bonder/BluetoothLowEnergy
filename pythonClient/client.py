@@ -98,6 +98,19 @@ async def connect():
                         # read S3 server response
                         server_response = bytes(await read_server_response(device, char))
                         print("S3 received: ",str(server_response))
+                        if server_response != bytes(): 
+                            print("\t[Characteristic] {0}: (Handle: {1}) ({2}) | Name: {3}, Value: {4} ".format(
+                                char.uuid,
+                                char.handle,
+                                ",".join(char.properties),
+                                char.description,
+                                str(server_response)
+                            ))
+                            
+                            decrypted_token2 = decrypt_message(g_session_key, server_response)
+                            if (decrypted_token2 == ahu_public_key):
+                                print("Handshake complete, verified AHU public key from decrypted token.")
+                                
 
     await device.disconnect()
     
@@ -163,6 +176,15 @@ def aes_ctr_encrypt(key, data, nonce):
     print("key: ", len(key), "nonce: ",len(nonce), "ctr: ", ctr)
     aes = AES.new(key, AES.MODE_CTR, counter=ctr)
     return aes.encrypt(data)
+
+def decrypt_message(key, receivedMessage):
+    token2 = base64.b64decode(receivedMessage)
+    token2 = str(token2).split(",")
+    if (token2[0] == "S3"):
+        
+        ctr = Counter.new(128, initial_value=int.from_bytes(ahu_random_iv))
+        aes = AES.new(key, AES.MODE_CTR, counter=ctr)
+        return aes.decrypt(token2[1])
     
 def generate_aes_verification_token():
     global g_session_key
