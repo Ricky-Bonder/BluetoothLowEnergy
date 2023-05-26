@@ -194,22 +194,18 @@ func decodeS2(receivedMessage []byte) ([]byte, error) {
 		log.Error("Failed to decrypt the token:", err)
 		return nil, err
 	}
-	log.Debug("@@@ DECRYPTED AHU PUB KEY FROM CLIENT:", string(decryptedToken))
-	if len(g_dev_pubkey) == len(decryptedToken) {
-		if bytes.Equal(g_dev_pubkey[:], decryptedToken) {
-			log.Debug("Token decryption successful. Confirmed the AHU public key. Generating token2 for client")
-			token2, err := encryptToken2(g_session_key, g_dev_pubkey[:], g_randomBytes)
-			if err != nil {
-				log.Error("Error generating token2 for client")
-				return nil, err
-			}
-			responseToClientBytes = []byte(token2)
-		} else {
-			log.Error("AHU Public Key and Decrypted AES Token contain different bytes.")
-			responseToClientBytes = nil
+
+	log.Debug("AHU pub key: ", g_dev_pubkey[:], " - decryptedToken: ", decryptedToken)
+	if bytes.Equal(g_dev_pubkey[:], decryptedToken) {
+		log.Debug("Token decryption successful. Confirmed the AHU public key. Generating token2 for client")
+		token2, err := encryptToken2(g_session_key, g_dev_pubkey[:], g_randomBytes)
+		if err != nil {
+			log.Error("Error generating token2 for client")
+			return nil, err
 		}
+		responseToClientBytes = []byte(token2)
 	} else {
-		log.Error("AHU Public Key and Decrypted AES Token have different lenghts.")
+		log.Error("AHU Public Key and Decrypted AES Token contain different bytes.")
 		responseToClientBytes = nil
 	}
 

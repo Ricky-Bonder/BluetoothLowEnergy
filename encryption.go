@@ -86,15 +86,13 @@ func decryptToken(cipherTextByte []byte, sessionKey []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	log.Debug("block size: ", block.BlockSize(), " - iv: ", len(g_randomBytes))
-
 	// Create a new AES-CTR mode cipher with the block
 	aesctr := cipher.NewCTR(block, g_randomBytes)
 	if err != nil {
 		return nil, err
 	}
 
-	var dstPlainTextByte []byte = make([]byte, 0)
+	var dstPlainTextByte []byte = make([]byte, 32)
 	// DECRYPT DATA
 	aesctr.XORKeyStream(dstPlainTextByte, cipherTextByte)
 	return dstPlainTextByte, nil
