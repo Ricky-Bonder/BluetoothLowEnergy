@@ -88,7 +88,8 @@ async def connect():
                         
                         generate_session_key(server_response)
                         
-                        encoded_verification_token = base64.b64encode(bytes("S2,", "utf-8") + generate_aes_verification_token())
+                        bytes_to_send = bytes("S2,", "utf-8") + generate_aes_verification_token()
+                        encoded_verification_token = base64.b64encode(bytes_to_send)
                         try:
                             await device.write_gatt_char(char.handle, encoded_verification_token, False)
                             print('Written verification token:', encoded_verification_token)
@@ -173,7 +174,7 @@ def generate_session_key(data):
     
 def aes_ctr_encrypt(key, data, nonce):
     ctr = Counter.new(128, initial_value=int.from_bytes(nonce, byteorder='big'))
-    print("key: ", len(key), "nonce: ",len(nonce), "ctr: ", ctr)
+    print("key: ", len(key), "nonce: ",len(nonce), "data: ", data)
     aes = AES.new(key, AES.MODE_CTR, counter=ctr)
     return aes.encrypt(data)
 
@@ -191,6 +192,7 @@ def generate_aes_verification_token():
     global ahu_public_key
     global ahu_random_iv
 
+    print("AHU pub key: ", ahu_public_key)
     # Generate a verification token by encrypting the client public key with the AES ciphe
     client_token_verify = aes_ctr_encrypt(g_session_key, ahu_public_key, ahu_random_iv)
     
