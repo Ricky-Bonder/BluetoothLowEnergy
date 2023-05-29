@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 
@@ -52,7 +53,7 @@ func GenerateSharedSecretNoPop(priv, pub []byte) []byte {
 
 func GenerateSharedSecretWithPoP(priv, pub []byte, pop string) error {
 
-	fmt.Printf("priv: %s, pub: %s, pop: %s\n", string(priv), string(pub), string(pop))
+	fmt.Printf("AHU priv: %s, Client pub: %s, PoP: %s\n", base64.StdEncoding.EncodeToString(priv), base64.StdEncoding.EncodeToString(pub), string(pop))
 	var secret []byte
 
 	secret, _ = curve25519.X25519(priv, pub)
@@ -66,6 +67,7 @@ func GenerateSharedSecretWithPoP(priv, pub []byte, pop string) error {
 	}
 
 	g_session_key = secret
+	log.Debug("@@@ SESSION KEY: ", hex.EncodeToString(secret))
 
 	return nil
 }
@@ -92,7 +94,7 @@ func decryptToken(cipherTextByte []byte, sessionKey []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	var dstPlainTextByte []byte = make([]byte, 32)
+	var dstPlainTextByte []byte = make([]byte, 48)
 	// DECRYPT DATA
 	aesctr.XORKeyStream(dstPlainTextByte, cipherTextByte)
 	return dstPlainTextByte, nil
