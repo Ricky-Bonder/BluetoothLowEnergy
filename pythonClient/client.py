@@ -169,7 +169,7 @@ def generate_session_key(data):
     # Perform the XOR operation between the shared key and the SHA-256 digest 
     g_session_key = bytes([x ^ y for x, y in zip(shared_secret, sha_pop)])
 
-    print("generated session key:",g_session_key)
+    print("generated session key:",''.join('{:02}'.format(x) for x in g_session_key))
     
     
 def aes_ctr_encrypt(key, data, nonce):
