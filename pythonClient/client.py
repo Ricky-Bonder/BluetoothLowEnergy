@@ -7,9 +7,10 @@ import base64
 import hashlib
 import time
 from Crypto.Cipher import AES
+import binascii
 from Crypto.Util import Counter
 
-g_private_key = None
+g_public_key = None
 g_private_key = None
 g_verification_token = None
 
@@ -19,6 +20,8 @@ def device_sort(device):
     return device.address
 
 async def connect():
+    global g_session_key
+    global g_public_key
     ble_server = None
     KEY_EXCHANGE_CHAR_UUID = "12346677-0000-1000-8000-00805f9b34fb"
 
@@ -42,7 +45,9 @@ async def connect():
 
     public_key_base64 = generate_key_pair()
     
-    handshake_data = base64.b64encode(bytes("S0,", "utf-8") + public_key_base64)
+    print("client public key bytes: ", public_key_base64, " encoded base64: ", base64.b64encode(public_key_base64), " to string: ", str(public_key_base64))
+    
+    handshake_data = bytes("S0,", "utf-8") + base64.b64encode(public_key_base64)
 
 
     print('Connecting...')
@@ -88,8 +93,8 @@ async def connect():
                         
                         generate_session_key(server_response)
                         
-                        bytes_to_send = bytes("S2,", "utf-8") + generate_aes_verification_token()
-                        encoded_verification_token = base64.b64encode(bytes_to_send)
+                        bytes_to_send = bytes("S2,", "utf-8") + base64.b64encode(generate_aes_verification_token())
+                        encoded_verification_token = bytes_to_send
                         try:
                             await device.write_gatt_char(char.handle, encoded_verification_token, False)
                             print('Written verification token:', encoded_verification_token)
@@ -107,10 +112,17 @@ async def connect():
                                 char.description,
                                 str(server_response)
                             ))
-                            
                             decrypted_token2 = decrypt_message(g_session_key, server_response)
-                            if (decrypted_token2 == ahu_public_key):
+                            public_key_bytes = g_public_key.public_bytes(
+                                encoding = serialization.Encoding.Raw,
+                                format = serialization.PublicFormat.Raw
+                            )
+                            print("dev_verify: ", binascii.hexlify(decrypted_token2))
+                            print("public_key_bytes: ", binascii.hexlify(public_key_bytes))
+                            if (decrypted_token2 == public_key_bytes):
                                 print("Handshake complete, verified AHU public key from decrypted token.")
+                            else:
+                                print("AHU pub key and dev_verify bytes don't match")
                                 
 
     await device.disconnect()
@@ -139,6 +151,7 @@ def generate_session_key(data):
     global g_session_key
     global ahu_public_key
     global ahu_random_iv
+    global g_private_key
     handshake_structure = str(data).split(",")
     s1 = handshake_structure[0]
     s1 = s1[2:]
@@ -156,43 +169,49 @@ def generate_session_key(data):
     
     # Decode the second and third items from base64
     ahu_public_key = base64.b64decode(server_pub_key)
-    ahu_random_iv = base64.b64decode(nonce)
+    ahu_random_iv = base64.b64decode(nonce) 
     
    
-    private_key = X25519PrivateKey.generate()
-    # public_key = private_key.public_key()
-    shared_secret = private_key.exchange(X25519PublicKey.from_public_bytes(ahu_public_key))
+    # private_key = X25519PrivateKey.generate()
+    # # public_key = private_key.public_key()
+    shared_secret = g_private_key.exchange(X25519PublicKey.from_public_bytes(ahu_public_key))
+    # shared_secret = g_private_key.exchange(ahu_public_key)
     
     # encode pop as SHA256(PoP)
     sha_pop = hashlib.sha256(g_PoP.encode()).digest()
-
+    
     # Perform the XOR operation between the shared key and the SHA-256 digest 
     g_session_key = bytes([x ^ y for x, y in zip(shared_secret, sha_pop)])
 
-    print("generated session key:",''.join('{:02}'.format(x) for x in g_session_key))
-    
-    
+    print("generated session key:",g_session_key)
+
 def aes_ctr_encrypt(key, data, nonce):
     ctr = Counter.new(128, initial_value=int.from_bytes(nonce, byteorder='big'))
-    print("key: ", len(key), "nonce: ",len(nonce), "data: ", data)
+    print("shared key: ", binascii.hexlify(bytearray(key)), "nonce: ",binascii.hexlify(bytearray(nonce)), "data: ", data)
     aes = AES.new(key, AES.MODE_CTR, counter=ctr)
     return aes.encrypt(data)
 
 def decrypt_message(key, receivedMessage):
-    token2 = base64.b64decode(receivedMessage)
-    token2 = str(token2).split(",")
-    if (token2[0] == "S3"):
-        
-        ctr = Counter.new(128, initial_value=int.from_bytes(ahu_random_iv))
+    token2 = str(receivedMessage).split(",")
+    s3 = token2[0]
+    s3 = s3[2:]
+    s3_body = token2[1]
+    s3_body = s3_body[:-1]
+    if (s3 == "S3"):
+        print("s3_body still encoded: ", s3_body)
+        s3_body = base64.b64decode(s3_body)
+        print("s3_body decoded base64: ", binascii.hexlify(s3_body))
+    
+        ctr = Counter.new(128, initial_value=int.from_bytes(ahu_random_iv, byteorder='big'))
         aes = AES.new(key, AES.MODE_CTR, counter=ctr)
-        return aes.decrypt(token2[1])
+        return aes.decrypt(s3_body)
     
 def generate_aes_verification_token():
     global g_session_key
     global ahu_public_key
     global ahu_random_iv
 
-    print("AHU pub key: ", ahu_public_key)
+    print("AHU pub key: ", binascii.hexlify(bytearray(ahu_public_key)))
     # Generate a verification token by encrypting the client public key with the AES ciphe
     client_token_verify = aes_ctr_encrypt(g_session_key, ahu_public_key, ahu_random_iv)
     
@@ -202,11 +221,11 @@ def generate_aes_verification_token():
 def generate_key_pair():
     # Generate a private key
     global g_private_key
-    global public_key
+    global g_public_key
     g_private_key = X25519PrivateKey.generate()
 
     # Derive the public key from the private key
-    public_key = g_private_key.public_key()
+    g_public_key = g_private_key.public_key()
 
     # Print the private and public keys in PEM format
     # print("Private key (PEM format):")
@@ -222,7 +241,7 @@ def generate_key_pair():
     #     format = serialization.PublicFormat.SubjectPublicKeyInfo
     # ))
 
-    public_key_bytes = public_key.public_bytes(
+    public_key_bytes = g_public_key.public_bytes(
         encoding = serialization.Encoding.Raw,
         format = serialization.PublicFormat.Raw
     )
@@ -233,12 +252,15 @@ def generate_key_pair():
         public_key_bytes += b'\x00' * (32 - len(public_key_bytes))
     elif len(public_key_bytes) > 32:
         public_key_bytes = public_key_bytes[:32]
+        
     
     # Returns the public key encoded to be written in the BLE characteristic
     return public_key_bytes
 
 async def main():
     await connect()
+    # test()
+    
 
 if __name__ == '__main__':
     asyncio.run(main())
