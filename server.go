@@ -5,6 +5,7 @@ import (
 
 	"bytes"
 	"encoding/base64"
+	"encoding/hex"
 	"strings"
 
 	"github.com/muka/go-bluetooth/api/service"
@@ -70,30 +71,33 @@ func serve(adapterID string, deviceName string) error {
 	// set the read and write callbacks for the characteristic
 	handshakeChar.OnRead(service.CharReadCallback(func(c *service.Char, options map[string]interface{}) ([]byte, error) {
 		log.Warnf("GOT READ REQUEST, sending bytes: ", string(responseToClientBytes))
+		// log.Warnf("GOT READ REQUEST, sending bytes: ", string(responseToClientBytes), "raw: ", responseToClientBytes, "encoded base64:", base64.StdEncoding.EncodeToString(responseToClientBytes))
 		return responseToClientBytes, nil
 	}))
 
 	handshakeChar.OnWrite(service.CharWriteCallback(func(c *service.Char, value []byte) ([]byte, error) {
 		log.Warnf("GOT WRITE REQUEST")
 		var decodedData = make([]byte, len(value))
+
+		parsedMessage := strings.SplitN(string(value), ",", 2)
+		log.Info("base64 body of message is ", parsedMessage[1])
+
 		// Decode the encoded key using base64 decoding
-		log.Debug("decoded data: ", len(decodedData), " value: ", len(value), " - value value: ", string(value))
-		_, err := base64.StdEncoding.Decode(decodedData, value)
+		log.Debug("len of data received: ", len(decodedData), " - string value received: ", string(value))
+		decodedData, err := base64.StdEncoding.DecodeString(parsedMessage[1])
 		if err != nil {
 			log.Errorf("Error: %v Decoding: %s ", err, string(value))
 			return nil, err
 		}
 
-		log.Infof("decoded data as string : %v - as base64: ", string(decodedData), base64.StdEncoding.EncodeToString(decodedData))
+		log.Infof("decoded data as string: %v ", decodedData)
 
-		parsedMessage := strings.SplitN(string(decodedData), ",", 2)
-		log.Info("actual data is ", parsedMessage[1])
 		if strings.Contains(parsedMessage[0], "S0") {
 			log.Debug("Decoding client's message S0")
-			return decodeS0([]byte(parsedMessage[1]))
+			return decodeS0([]byte(decodedData))
 		} else if strings.Contains(parsedMessage[0], "S2") {
 			log.Debug("Decoding client's message S2")
-			return decodeS2([]byte(parsedMessage[1]))
+			return decodeS2([]byte(decodedData))
 		} else {
 			return nil, err
 		}
@@ -187,20 +191,23 @@ func decodeS0(receivedMessage []byte) ([]byte, error) {
 	return responseToClientBytes, nil
 }
 
-func decodeS2(receivedMessage []byte) ([]byte, error) {
-	log.Debug("@@@ bytes:", base64.StdEncoding.EncodeToString(receivedMessage))
+func decodeS2(cliVerify []byte) ([]byte, error) {
+	log.Debug("@@@ bytes:", string(cliVerify))
 
 	// Decrypt the token using the session key
-	decryptedToken, err := decryptToken(receivedMessage, g_session_key)
+	decryptedToken, err := decryptToken(cliVerify)
 	if err != nil {
 		log.Error("Failed to decrypt the token:", err)
 		return nil, err
 	}
 
-	log.Debug("AHU pub key: ", base64.StdEncoding.EncodeToString(g_dev_pubkey[:]), " - decryptedToken: ", base64.StdEncoding.EncodeToString(decryptedToken))
+	log.Debug("AHU pub key: ", hex.EncodeToString(g_dev_pubkey[:]))
+	log.Debug("cliVerify: ", hex.EncodeToString(cliVerify))
+	// log.Debug("AHU pub key: ", base64.StdEncoding.EncodeToString(g_dev_pubkey[:]), " - cliVerify: ", base64.StdEncoding.EncodeToString(cliVerify))
+	log.Debug("AHU pub key: ", base64.StdEncoding.EncodeToString(g_dev_pubkey[:]), " - decryptedToken: ", string(decryptedToken))
 	if bytes.Equal(g_dev_pubkey[:], decryptedToken) {
 		log.Debug("Token decryption successful. Confirmed the AHU public key. Generating token2 for client")
-		token2, err := encryptToken2(g_session_key, g_dev_pubkey[:], g_randomBytes)
+		token2, err := encryptToken2(g_dev_pubkey[:])
 		if err != nil {
 			log.Error("Error generating token2 for client")
 			return nil, err

@@ -54,6 +54,7 @@ func GenerateSharedSecretNoPop(priv, pub []byte) []byte {
 func GenerateSharedSecretWithPoP(priv, pub []byte, pop string) error {
 
 	fmt.Printf("AHU priv: %s, Client pub: %s, PoP: %s\n", base64.StdEncoding.EncodeToString(priv), base64.StdEncoding.EncodeToString(pub), string(pop))
+	fmt.Printf("@@@ client pub key hex: %v", hex.EncodeToString(pub))
 	var secret []byte
 
 	secret, _ = curve25519.X25519(priv, pub)
@@ -78,12 +79,13 @@ func GenarateInitializationVector() error {
 		log.Errorf("Error generating random bytes: %v", err)
 		return err
 	}
+	log.Debug("@@@ IV: ", hex.EncodeToString(g_randomBytes))
 	return nil
 }
 
-func decryptToken(cipherTextByte []byte, sessionKey []byte) ([]byte, error) {
+func decryptToken(cipherTextByte []byte) ([]byte, error) {
 	// Create a new AES cipher block
-	block, err := aes.NewCipher(sessionKey)
+	block, err := aes.NewCipher(g_session_key)
 	if err != nil {
 		return nil, err
 	}
@@ -94,30 +96,31 @@ func decryptToken(cipherTextByte []byte, sessionKey []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	var dstPlainTextByte []byte = make([]byte, 48)
+	var dstPlainTextByte []byte = make([]byte, 32)
 	// DECRYPT DATA
 	aesctr.XORKeyStream(dstPlainTextByte, cipherTextByte)
 	return dstPlainTextByte, nil
 }
 
-func encryptToken2(plainTextByte []byte, sessionKey []byte, nonce []byte) (string, error) {
+func encryptToken2(plainTextByte []byte) (string, error) {
 	// GET CIPHER BLOCK USING KEY
-	block, err := aes.NewCipher(sessionKey)
+	block, err := aes.NewCipher(g_session_key)
 	if err != nil {
 		return "", err
 	}
 
 	// GET CTR
-	aesctr := cipher.NewCTR(block, nonce)
+	aesctr := cipher.NewCTR(block, g_randomBytes)
 	if err != nil {
 		return "", err
 	}
 
-	var dstCipherTextByte []byte = make([]byte, 0)
+	var dstCipherTextByte []byte = make([]byte, len(plainTextByte))
 	// ENCRYPT DATA
 	aesctr.XORKeyStream(dstCipherTextByte, plainTextByte)
 
 	// RETURN String Base64 encoded
 	cipherText := "S3," + base64.StdEncoding.EncodeToString(dstCipherTextByte)
+	fmt.Printf("@@@ dev_cliverify hex: %v", hex.EncodeToString(dstCipherTextByte))
 	return cipherText, nil
 }
