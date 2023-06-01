@@ -37,7 +37,7 @@ async def connect():
         'S.N.', 'Name', 'Address'))
     for i, _ in enumerate(devices):
         print('[{0: >2}] {1: <33} {2: <12}'.format(i + 1, devices[i].name or 'Unknown', devices[i].address))
-        if devices[i].name == 'RickBLETest':
+        if devices[i].name == 'AHU-PowerFlow':
             ble_server = devices[i]
             print('Found device of choice:',devices[i].name)
 
