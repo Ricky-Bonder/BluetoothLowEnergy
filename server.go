@@ -174,7 +174,7 @@ func decodeS0(receivedMessage []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	GenerateSharedSecretWithPoP(g_dev_privkey[:], clientPublicKey[:], PoP)
+	GenerateSharedKeyWithPoP(g_dev_privkey[:], clientPublicKey[:], PoP)
 
 	//concat: S1, <base64(chiave pubblica)>,<base64(random)>
 	concatStr :=
@@ -207,7 +207,7 @@ func decodeS2(cliVerify []byte) ([]byte, error) {
 	log.Debug("AHU pub key: ", base64.StdEncoding.EncodeToString(g_dev_pubkey[:]), " - decryptedToken: ", string(decryptedToken))
 	if bytes.Equal(g_dev_pubkey[:], decryptedToken) {
 		log.Debug("Token decryption successful. Confirmed the AHU public key. Generating token2 for client")
-		token2, err := encryptToken2(g_dev_pubkey[:])
+		token2, err := encryptToken2(clientPublicKey[:])
 		if err != nil {
 			log.Error("Error generating token2 for client")
 			return nil, err

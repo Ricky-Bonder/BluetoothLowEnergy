@@ -191,8 +191,8 @@ def aes_ctr_encrypt(key, data, nonce):
     aes = AES.new(key, AES.MODE_CTR, counter=ctr)
     return aes.encrypt(data)
 
-def decrypt_message(key, receivedMessage):
-    token2 = str(receivedMessage).split(",")
+def decrypt_message(key, received_message):
+    token2 = str(received_message).split(",")
     s3 = token2[0]
     s3 = s3[2:]
     s3_body = token2[1]

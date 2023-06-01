@@ -18,7 +18,7 @@ import (
 var g_dev_pubkey [32]byte
 var g_dev_privkey [32]byte
 var g_randomBytes = make([]byte, 16)
-var g_session_key = make([]byte, 0)
+var g_shared_key = make([]byte, 0)
 
 /*
 GenerateKey generates a public private key pair using Curve25519.
@@ -51,7 +51,7 @@ func GenerateSharedSecretNoPop(priv, pub []byte) []byte {
 
 }
 
-func GenerateSharedSecretWithPoP(priv, pub []byte, pop string) error {
+func GenerateSharedKeyWithPoP(priv, pub []byte, pop string) error {
 
 	fmt.Printf("AHU priv: %s, Client pub: %s, PoP: %s\n", base64.StdEncoding.EncodeToString(priv), base64.StdEncoding.EncodeToString(pub), string(pop))
 	fmt.Printf("@@@ client pub key hex: %v", hex.EncodeToString(pub))
@@ -67,7 +67,7 @@ func GenerateSharedSecretWithPoP(priv, pub []byte, pop string) error {
 		secret[i] ^= popHash[i]
 	}
 
-	g_session_key = secret
+	g_shared_key = secret
 	log.Debug("@@@ SESSION KEY: ", hex.EncodeToString(secret))
 
 	return nil
@@ -85,7 +85,7 @@ func GenarateInitializationVector() error {
 
 func decryptToken(cipherTextByte []byte) ([]byte, error) {
 	// Create a new AES cipher block
-	block, err := aes.NewCipher(g_session_key)
+	block, err := aes.NewCipher(g_shared_key)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func decryptToken(cipherTextByte []byte) ([]byte, error) {
 
 func encryptToken2(plainTextByte []byte) (string, error) {
 	// GET CIPHER BLOCK USING KEY
-	block, err := aes.NewCipher(g_session_key)
+	block, err := aes.NewCipher(g_shared_key)
 	if err != nil {
 		return "", err
 	}
