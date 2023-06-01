@@ -19,7 +19,7 @@ var clientPublicKey [32]byte
 
 var PoP string = "e93Y9eeQWAx00mxL6pxN3YKEyv00XjgG6V06lulibH8p7bvboo9hg9zkNivG8oWB6Qjd335Q6Bu0h9XLspQc5ak7RW6LMVG78jT0Rq49pt6fRvUt5KgaAJ5kPqyn4z4PQrw30t23Nbs15WUQ110"
 
-func Serve(adapterID string, deviceName string) error {
+func StartBeaconing(adapterID string, deviceName string) error {
 
 	options := service.AppOptions{
 		AdapterID:  adapterID,
@@ -91,13 +91,13 @@ func Serve(adapterID string, deviceName string) error {
 
 		if strings.Contains(parsedMessage[0], "S0") {
 			log.Debug("Decoding client's message S0")
-			err := decodeS0([]byte(decodedData))
+			err := handleSessionEnstablishment([]byte(decodedData))
 			if err != nil {
 				return nil, err
 			}
 		} else if strings.Contains(parsedMessage[0], "S2") {
 			log.Debug("Decoding client's message S2")
-			err := decodeS2([]byte(decodedData))
+			err := handleSessionVerify([]byte(decodedData))
 			if err != nil {
 				return nil, err
 			}
@@ -129,20 +129,17 @@ func Serve(adapterID string, deviceName string) error {
 		return err
 	}
 
-	defer cancel()
-
-	wait := make(chan bool)
-	go func() {
-		time.Sleep(time.Duration(timeout) * time.Second)
-		wait <- true
-	}()
-
-	<-wait
+	time.Sleep(time.Duration(timeout) * time.Hour)
+	cancel()
 
 	return nil
 }
 
-func decodeS0(receivedMessage []byte) error {
+// func setupConnectionProperties(deviceName string) error {
+
+// }
+
+func handleSessionEnstablishment(receivedMessage []byte) error {
 	clientPublicKey = [32]byte(receivedMessage)
 
 	err := GenerateKey()
@@ -172,7 +169,7 @@ func decodeS0(receivedMessage []byte) error {
 	return nil
 }
 
-func decodeS2(cliVerify []byte) error {
+func handleSessionVerify(cliVerify []byte) error {
 	// Decrypt the token using the session key
 	decryptedToken, err := DecryptToken(cliVerify)
 	if err != nil {

@@ -39,7 +39,7 @@ func Run(deviceName string) error {
 		return errors.New("Device name is required")
 	}
 
-	err := Serve(adapterID, deviceName)
+	err := StartBeaconing(adapterID, deviceName)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
 		return err
@@ -47,7 +47,7 @@ func Run(deviceName string) error {
 
 	setBuetoothLowEnergyMode(btmgmt)
 
-	return Serve(adapterID, deviceName)
+	return StartBeaconing(adapterID, deviceName)
 
 }
 
