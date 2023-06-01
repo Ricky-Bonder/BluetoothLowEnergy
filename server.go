@@ -19,7 +19,7 @@ var clientPublicKey [32]byte
 
 var PoP string = "e93Y9eeQWAx00mxL6pxN3YKEyv00XjgG6V06lulibH8p7bvboo9hg9zkNivG8oWB6Qjd335Q6Bu0h9XLspQc5ak7RW6LMVG78jT0Rq49pt6fRvUt5KgaAJ5kPqyn4z4PQrw30t23Nbs15WUQ110"
 
-func serve(adapterID string, deviceName string) error {
+func Serve(adapterID string, deviceName string) error {
 
 	options := service.AppOptions{
 		AdapterID:  adapterID,

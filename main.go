@@ -5,23 +5,27 @@ import (
 	"os"
 
 	"github.com/muka/go-bluetooth/hw"
+	"github.com/muka/go-bluetooth/hw/linux/btmgmt"
 	log "github.com/sirupsen/logrus"
 )
 
 func main() {
-	adapterID := "hci0"
+
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Errorf("Failed to get hostname %s", err)
+		os.Exit(1)
 	}
-	hostname = "AHU-PowerFlow" // @RO solo per test
-	err = Run(adapterID, hostname)
+	hostname = "AHU-PowerFlow"
+	err = Run(hostname)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
+		os.Exit(2)
 	}
 }
 
-func Run(adapterID string, deviceName string) error {
+func Run(deviceName string) error {
+	const adapterID = "hci0"
 
 	log.SetLevel(log.TraceLevel)
 
@@ -35,18 +39,21 @@ func Run(adapterID string, deviceName string) error {
 		return errors.New("Device name is required")
 	}
 
-	err := serve(adapterID, deviceName)
+	err := Serve(adapterID, deviceName)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
 		return err
 	}
 
-	// set LE mode
+	setBuetoothLowEnergyMode(btmgmt)
+
+	return Serve(adapterID, deviceName)
+
+}
+
+func setBuetoothLowEnergyMode(btmgmt *btmgmt.BtMgmt) {
 	btmgmt.SetPowered(false)
 	btmgmt.SetLe(true)
 	btmgmt.SetBredr(false)
 	btmgmt.SetPowered(true)
-
-	return serve(adapterID, deviceName)
-
 }
