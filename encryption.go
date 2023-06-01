@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	random "math/rand"
+	"time"
 
 	"golang.org/x/crypto/curve25519"
 
@@ -21,7 +23,7 @@ var g_randomBytes = make([]byte, 16)
 var g_shared_key = make([]byte, 0)
 
 /*
-GenerateKey generates a public private key pair using Curve25519.
+GenerateKey generates a public-private key pair using the Curve25519 algorithm.
 */
 func GenerateKey() error {
 
@@ -30,31 +32,14 @@ func GenerateKey() error {
 		return err
 	}
 
-	// @RO inutile?
-	// g_dev_privkey[0] &= 0xF8
-	// g_dev_privkey[31] &= 0x7F
-	// g_dev_privkey[31] |= 0x40
-
 	curve25519.ScalarBaseMult(&g_dev_pubkey, &g_dev_privkey)
 	return nil
-}
-
-/*
-GenerateSharedSecret generates the shared secret with a given public private key pair.
-*/
-func GenerateSharedSecretNoPop(priv, pub []byte) []byte {
-	var secret []byte
-
-	secret, _ = curve25519.X25519(priv, pub)
-
-	return secret[:]
-
 }
 
 func GenerateSharedKeyWithPoP(priv, pub []byte, pop string) error {
 
 	fmt.Printf("AHU priv: %s, Client pub: %s, PoP: %s\n", base64.StdEncoding.EncodeToString(priv), base64.StdEncoding.EncodeToString(pub), string(pop))
-	fmt.Printf("@@@ client pub key hex: %v", hex.EncodeToString(pub))
+	fmt.Printf("client pub key hex: %v", hex.EncodeToString(pub))
 	var secret []byte
 
 	secret, _ = curve25519.X25519(priv, pub)
@@ -68,7 +53,7 @@ func GenerateSharedKeyWithPoP(priv, pub []byte, pop string) error {
 	}
 
 	g_shared_key = secret
-	log.Debug("@@@ SESSION KEY: ", hex.EncodeToString(secret))
+	log.Debug("Generated Session Key HEX: ", hex.EncodeToString(secret))
 
 	return nil
 }
@@ -83,7 +68,10 @@ func GenarateInitializationVector() error {
 	return nil
 }
 
-func decryptToken(cipherTextByte []byte) ([]byte, error) {
+/*
+* Decrypts a []byte token using algorithm AES-256-Counter-mode (using the IV)
+ */
+func DecryptToken(cipherTextByte []byte) ([]byte, error) {
 	// Create a new AES cipher block
 	block, err := aes.NewCipher(g_shared_key)
 	if err != nil {
@@ -102,25 +90,38 @@ func decryptToken(cipherTextByte []byte) ([]byte, error) {
 	return dstPlainTextByte, nil
 }
 
-func encryptToken2(plainTextByte []byte) (string, error) {
-	// GET CIPHER BLOCK USING KEY
+/*
+* Encrypts a []byte token using algorithm AES-256-Counter-mode (using the IV)
+ */
+func EncryptToken(plainTextByte []byte) ([]byte, error) {
+	// Create a new AES cipher block
 	block, err := aes.NewCipher(g_shared_key)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// GET CTR
+	// Create a new AES-CTR mode cipher with the block
 	aesctr := cipher.NewCTR(block, g_randomBytes)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	var dstCipherTextByte []byte = make([]byte, len(plainTextByte))
 	// ENCRYPT DATA
 	aesctr.XORKeyStream(dstCipherTextByte, plainTextByte)
 
-	// RETURN String Base64 encoded
-	cipherText := "S3," + base64.StdEncoding.EncodeToString(dstCipherTextByte)
-	fmt.Printf("@@@ dev_cliverify hex: %v", hex.EncodeToString(dstCipherTextByte))
-	return cipherText, nil
+	// RETURN encoded byte array containing the dev_verify for client
+	return dstCipherTextByte, nil
+}
+
+const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+
+func generatePoP(length int) string {
+	random.Seed(time.Now().UnixNano())
+
+	result := make([]byte, length)
+	for i := 0; i < length; i++ {
+		result[i] = charset[random.Intn(len(charset))]
+	}
+	return string(result)
 }
