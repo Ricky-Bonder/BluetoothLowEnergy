@@ -1,11 +1,10 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 	"os"
+	"time"
 
-	"github.com/muka/go-bluetooth/hw"
-	"github.com/muka/go-bluetooth/hw/linux/btmgmt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -16,44 +15,15 @@ func main() {
 		log.Errorf("Failed to get hostname %s", err)
 		os.Exit(1)
 	}
+	const adapterID = "hci0"
 	hostname = "AHU-PowerFlow"
-	err = Run(hostname)
+	bleService, err := NewBluetoothService(adapterID, hostname)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
 		os.Exit(2)
 	}
-}
+	fmt.Println(bleService)
 
-func Run(deviceName string) error {
-	const adapterID = "hci0"
-
-	log.SetLevel(log.TraceLevel)
-
-	btmgmt := hw.NewBtMgmt(adapterID)
-	if len(os.Getenv("DOCKER")) > 0 {
-		btmgmt.BinPath = "./bin/docker-btmgmt"
-	}
-
-	if deviceName == "" {
-		log.Fatal("Device name is required")
-		return errors.New("Device name is required")
-	}
-
-	err := StartBeaconing(adapterID, deviceName)
-	if err != nil {
-		log.Fatalf("Failed to serve: %s", err)
-		return err
-	}
-
-	setBuetoothLowEnergyMode(btmgmt)
-
-	return StartBeaconing(adapterID, deviceName)
-
-}
-
-func setBuetoothLowEnergyMode(btmgmt *btmgmt.BtMgmt) {
-	btmgmt.SetPowered(false)
-	btmgmt.SetLe(true)
-	btmgmt.SetBredr(false)
-	btmgmt.SetPowered(true)
+	time.Sleep(time.Duration(6) * time.Hour)
+	bleService.StopBeaconing()
 }
