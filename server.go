@@ -65,7 +65,7 @@ func NewBluetoothService(adapterID string, deviceName string) (*bleServer, error
 		log.Fatalf("Failed to initialize bluetooth app: %s", err)
 		return nil, err
 	}
-	char, err := createHandshakeChar(b, "1234", "6677")
+	char, err := createServiceWithChar(b, "1234", "6677")
 	if err != nil {
 		log.Fatalf("Failed to create ble characteristic: %s", err)
 		return nil, err
@@ -110,19 +110,22 @@ func (b *bleServer) InitializeBluetoothApp(adapterID string, deviceName string) 
 	return nil
 }
 
-func createService(b *bleServer, serviceUuid string) (*bleApiService.Service, error) {
-	isNewService := true
+func getService(b *bleServer, serviceUuid string) *bleApiService.Service {
 	services := b.bluetoothAdapter.GetServices()
 
 	for _, serv := range services {
 		if serv.UUID == b.appUUID+serviceUuid+b.appUUIDSuffix {
-			isNewService = false
-			log.Warn("Bluetooth Service with UUID: ", b.appUUID+serviceUuid+b.appUUIDSuffix, " already exists.")
-			return serv, nil
+			log.Info("Bluetooth Service with UUID: ", b.appUUID+serviceUuid+b.appUUIDSuffix, " was found.")
+			return serv
 		}
 	}
+	return nil
+}
 
-	if isNewService {
+func createService(b *bleServer, serviceUuid string) (*bleApiService.Service, error) {
+	retrievedService := getService(b, serviceUuid)
+
+	if retrievedService == nil {
 		log.Warn("Creating new Bluetooth Service with UUID: ", serviceUuid)
 
 		service, err := b.bluetoothAdapter.NewService(serviceUuid)
@@ -136,22 +139,25 @@ func createService(b *bleServer, serviceUuid string) (*bleApiService.Service, er
 		}
 		return service, nil
 	}
-	return nil, nil
+	return retrievedService, nil
+}
+
+func getCharacteristic(b *bleServer, service *bleApiService.Service, charUuid string) *bleApiService.Char {
+	characteristics := service.GetChars()
+
+	for _, char := range characteristics {
+		if char.UUID == b.appUUID+charUuid+b.appUUIDSuffix {
+			log.Info("Bluetooth Characteristic with UUID: ", b.appUUID+charUuid+b.appUUIDSuffix, " was found.")
+			return char
+		}
+	}
+	return nil
 }
 
 func createCharacteristic(b *bleServer, service *bleApiService.Service, charUuid string) (*bleApiService.Char, error) {
-	isNewCharacteristic := true
+	retrievedCharacteristic := getCharacteristic(b, service, charUuid)
 
-	characteristics := service.GetChars()
-	for _, char := range characteristics {
-		if char.UUID == b.appUUID+charUuid+b.appUUIDSuffix {
-			isNewCharacteristic = false
-			log.Warn("Bluetooth Characteristic with UUID: ", b.appUUID+charUuid+b.appUUIDSuffix, " already exists.")
-			return char, nil
-		}
-	}
-
-	if isNewCharacteristic {
+	if retrievedCharacteristic == nil {
 		log.Warn("Creating new Bluetooth Characteristic with UUID: ", charUuid)
 		char, err := service.NewChar(charUuid)
 		if err != nil {
@@ -159,10 +165,10 @@ func createCharacteristic(b *bleServer, service *bleApiService.Service, charUuid
 		}
 		return char, nil
 	}
-	return nil, nil
+	return retrievedCharacteristic, nil
 }
 
-func createHandshakeChar(b *bleServer, serviceUuid string, charUuid string) (*bleApiService.Char, error) {
+func createServiceWithChar(b *bleServer, serviceUuid string, charUuid string) (*bleApiService.Char, error) {
 	service, err := createService(b, serviceUuid)
 	if err != nil {
 		log.Error("Error creating BLE Service. ", err)
@@ -193,7 +199,7 @@ func defineHandshakeFlagCallbacks(b *bleServer, handshakeChar *bleApiService.Cha
 
 	// set the read callback for the handshake characteristic
 	handshakeChar.OnRead(bleApiService.CharReadCallback(func(c *bleApiService.Char, options map[string]interface{}) ([]byte, error) {
-		log.Warnf("GOT READ REQUEST, sending bytes: ", string(b.responseToClientBytes))
+		log.Warnf("GOT READ REQUEST, sending bytes: %s", string(b.responseToClientBytes))
 		return b.responseToClientBytes, nil
 	}))
 
@@ -248,7 +254,7 @@ func (b *bleServer) StartBeaconing(handshakeChar *bleApiService.Char) error {
 	timeout := uint32(6 * 3600) // 6h
 	log.Infof("Advertising for %ds...", timeout)
 
-	b.closeBeaconFn, err = b.bluetoothAdapter.Advertise(timeout)
+	b.closeBeaconFn, err = b.bluetoothAdapter.Advertise(0)
 	if err != nil {
 		return err
 	}
