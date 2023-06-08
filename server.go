@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
-	"strings"
 
 	bleApiService "github.com/muka/go-bluetooth/api/service"
 	"github.com/muka/go-bluetooth/bluez/profile/agent"
@@ -33,6 +32,7 @@ type bleServer struct {
 	clientPublicKey       []byte
 	PoP                   string
 	closeBeaconFn         func()
+	payloadHandler        IHandshake
 }
 
 func setBuetoothLowEnergyMode(btmgmt *btmgmt.BtMgmt) {
@@ -208,35 +208,8 @@ func defineHandshakeFlagCallbacks(b *bleServer, handshakeChar *bleApiService.Cha
 		log.Warnf("GOT WRITE REQUEST")
 		var decodedData = make([]byte, len(bytesFromClient))
 
-		parsedMessage := strings.SplitN(string(bytesFromClient), ",", 2)
-		log.Info("base64 body of incoming message is ", parsedMessage[1])
+		b.payloadHandler.selector(bytesFromClient)
 
-		// Decode the encoded key using base64 decoding
-		decodedData, err := base64.StdEncoding.DecodeString(parsedMessage[1])
-		if err != nil {
-			log.Errorf("Error: %v Decoding: %s ", err, string(bytesFromClient))
-			return nil, err
-		}
-
-		log.Infof("decoded incoming message as string: %v ", decodedData)
-
-		if strings.Contains(parsedMessage[0], "S0") {
-			log.Debug("Decoding client's message S0")
-			err := handleSessionEnstablishment(b, []byte(decodedData))
-			if err != nil {
-				return nil, err
-			}
-		} else if strings.Contains(parsedMessage[0], "S2") {
-			log.Debug("Decoding client's message S2")
-			err := handleSessionVerify(b, []byte(decodedData))
-			if err != nil {
-				return nil, err
-			}
-		} else {
-			log.Debug("Decoded message doesn't match with any handshake step.")
-			return nil, err
-		}
-		return nil, nil
 	}))
 }
 

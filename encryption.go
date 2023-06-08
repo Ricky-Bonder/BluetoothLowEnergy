@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	random "math/rand"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/curve25519"
@@ -21,6 +22,44 @@ var g_dev_pubkey [32]byte
 var g_dev_privkey [32]byte
 var g_randomBytes = make([]byte, 16)
 var g_shared_key = make([]byte, 0)
+
+type IHandshake interface {
+	selector(dataFromClient []byte)
+}
+
+type myHandshake struct{}
+
+func (m myHandshake) selector(bytesFromClient []byte) ([]byte, error) {
+	parsedMessage := strings.SplitN(string(bytesFromClient), ",", 2)
+	log.Info("base64 body of incoming message is ", parsedMessage[1])
+
+	// Decode the encoded key using base64 decoding
+	decodedData, err := base64.StdEncoding.DecodeString(parsedMessage[1])
+	if err != nil {
+		log.Errorf("Error: %v Decoding: %s ", err, string(bytesFromClient))
+		return nil, err
+	}
+
+	log.Infof("decoded incoming message as string: %v ", decodedData)
+
+	if strings.Contains(parsedMessage[0], "S0") {
+		log.Debug("Decoding client's message S0")
+		err := handleSessionEnstablishment(b, []byte(decodedData))
+		if err != nil {
+			return nil, err
+		}
+	} else if strings.Contains(parsedMessage[0], "S2") {
+		log.Debug("Decoding client's message S2")
+		err := handleSessionVerify(b, []byte(decodedData))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		log.Debug("Decoded message doesn't match with any handshake step.")
+		return nil, err
+	}
+	return nil, nil
+}
 
 /*
 GenerateKey generates a public-private key pair using the Curve25519 algorithm.
