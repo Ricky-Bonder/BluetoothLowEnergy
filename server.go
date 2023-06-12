@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"os"
 
@@ -24,13 +21,11 @@ import (
 // 	PoP string = "e93Y9eeQWAx00mxL6pxN3YKEyv00XjgG6V06lulibH8p7bvboo9hg9zkNivG8oWB6Qjd335Q6Bu0h9XLspQc5ak7RW6LMVG78jT0Rq49pt6fRvUt5KgaAJ5kPqyn4z4PQrw30t23Nbs15WUQ110"
 // }
 
-type bleServer struct {
+type BleServer struct {
 	appUUIDSuffix         string
 	appUUID               string
 	bluetoothAdapter      *bleApiService.App
 	responseToClientBytes []byte
-	clientPublicKey       []byte
-	PoP                   string
 	closeBeaconFn         func()
 	payloadHandler        IHandshake
 }
@@ -42,12 +37,12 @@ func setBuetoothLowEnergyMode(btmgmt *btmgmt.BtMgmt) {
 	btmgmt.SetPowered(true)
 }
 
-func NewBluetoothService(adapterID string, deviceName string) (*bleServer, error) {
-	b := &bleServer{
+func NewBluetoothService(adapterID string, deviceName string, encryptionHandler IHandshake) (*BleServer, error) {
+	b := &BleServer{
 		appUUIDSuffix:         "-0000-1000-8000-00805F9B34FB",
 		appUUID:               "1234",
 		responseToClientBytes: make([]byte, 0),
-		PoP:                   "e93Y9eeQWAx00mxL6pxN3YKEyv00XjgG6V06lulibH8p7bvboo9hg9zkNivG8oWB6Qjd335Q6Bu0h9XLspQc5ak7RW6LMVG78jT0Rq49pt6fRvUt5KgaAJ5kPqyn4z4PQrw30t23Nbs15WUQ110",
+		payloadHandler:        encryptionHandler,
 	}
 
 	btmgmt := hw.NewBtMgmt(adapterID)
@@ -81,7 +76,7 @@ func NewBluetoothService(adapterID string, deviceName string) (*bleServer, error
 	return b, nil
 }
 
-func (b *bleServer) InitializeBluetoothApp(adapterID string, deviceName string) error {
+func (b *BleServer) InitializeBluetoothApp(adapterID string, deviceName string) error {
 
 	options := bleApiService.AppOptions{
 		AdapterID:  adapterID,
@@ -110,7 +105,7 @@ func (b *bleServer) InitializeBluetoothApp(adapterID string, deviceName string) 
 	return nil
 }
 
-func getService(b *bleServer, serviceUuid string) *bleApiService.Service {
+func getService(b *BleServer, serviceUuid string) *bleApiService.Service {
 	services := b.bluetoothAdapter.GetServices()
 
 	for _, serv := range services {
@@ -122,7 +117,7 @@ func getService(b *bleServer, serviceUuid string) *bleApiService.Service {
 	return nil
 }
 
-func createService(b *bleServer, serviceUuid string) (*bleApiService.Service, error) {
+func createService(b *BleServer, serviceUuid string) (*bleApiService.Service, error) {
 	retrievedService := getService(b, serviceUuid)
 
 	if retrievedService == nil {
@@ -142,7 +137,7 @@ func createService(b *bleServer, serviceUuid string) (*bleApiService.Service, er
 	return retrievedService, nil
 }
 
-func getCharacteristic(b *bleServer, service *bleApiService.Service, charUuid string) *bleApiService.Char {
+func getCharacteristic(b *BleServer, service *bleApiService.Service, charUuid string) *bleApiService.Char {
 	characteristics := service.GetChars()
 
 	for _, char := range characteristics {
@@ -154,7 +149,7 @@ func getCharacteristic(b *bleServer, service *bleApiService.Service, charUuid st
 	return nil
 }
 
-func createCharacteristic(b *bleServer, service *bleApiService.Service, charUuid string) (*bleApiService.Char, error) {
+func createCharacteristic(b *BleServer, service *bleApiService.Service, charUuid string) (*bleApiService.Char, error) {
 	retrievedCharacteristic := getCharacteristic(b, service, charUuid)
 
 	if retrievedCharacteristic == nil {
@@ -168,7 +163,7 @@ func createCharacteristic(b *bleServer, service *bleApiService.Service, charUuid
 	return retrievedCharacteristic, nil
 }
 
-func createServiceWithChar(b *bleServer, serviceUuid string, charUuid string) (*bleApiService.Char, error) {
+func createServiceWithChar(b *BleServer, serviceUuid string, charUuid string) (*bleApiService.Char, error) {
 	service, err := createService(b, serviceUuid)
 	if err != nil {
 		log.Error("Error creating BLE Service. ", err)
@@ -189,7 +184,7 @@ func createServiceWithChar(b *bleServer, serviceUuid string, charUuid string) (*
 	return handshakeChar, nil
 }
 
-func defineHandshakeFlagCallbacks(b *bleServer, handshakeChar *bleApiService.Char) {
+func defineHandshakeFlagCallbacks(b *BleServer, handshakeChar *bleApiService.Char) {
 
 	// define the flags for the characteristic
 	handshakeChar.Properties.Flags = []string{
@@ -206,14 +201,19 @@ func defineHandshakeFlagCallbacks(b *bleServer, handshakeChar *bleApiService.Cha
 	// set the write callback for the handshake characteristic
 	handshakeChar.OnWrite(bleApiService.CharWriteCallback(func(c *bleApiService.Char, bytesFromClient []byte) ([]byte, error) {
 		log.Warnf("GOT WRITE REQUEST")
-		var decodedData = make([]byte, len(bytesFromClient))
+		// var decodedData = make([]byte, len(bytesFromClient))
 
-		b.payloadHandler.selector(bytesFromClient)
+		var err error
+		b.responseToClientBytes, err = b.payloadHandler.Selector(bytesFromClient)
+		if err != nil {
+			log.Error(err)
+		}
 
+		return nil, nil
 	}))
 }
 
-func (b *bleServer) StartBeaconing(handshakeChar *bleApiService.Char) error {
+func (b *BleServer) StartBeaconing(handshakeChar *bleApiService.Char) error {
 
 	// defer b.bluetoothAdapter.Close()
 
@@ -235,69 +235,8 @@ func (b *bleServer) StartBeaconing(handshakeChar *bleApiService.Char) error {
 	return nil
 }
 
-func (b *bleServer) StopBeaconing() {
+func (b *BleServer) StopBeaconing() {
 	if b.closeBeaconFn != nil {
 		b.closeBeaconFn()
 	}
-}
-
-func handleSessionEnstablishment(b *bleServer, receivedMessage []byte) error {
-	b.clientPublicKey = []byte(receivedMessage)
-
-	err := GenerateKey()
-	if err != nil {
-		return err
-	}
-
-	err = GenarateInitializationVector()
-	if err != nil {
-		return err
-	}
-
-	GenerateSharedKeyWithPoP(g_dev_privkey[:], b.clientPublicKey[:], b.PoP)
-
-	//concat: S1, <base64(dev_pubkey)>,<base64(dev_rand)>
-	concatStr :=
-		"S1," +
-			base64.StdEncoding.EncodeToString(g_dev_pubkey[:]) +
-			"," +
-			base64.StdEncoding.EncodeToString(g_randomBytes)
-
-	// Convert the message to a []byte
-	// and put it in the variable that is exposed and called by the client in the OnRead function
-	b.responseToClientBytes = []byte(concatStr)
-
-	log.Debug("generated bytes for client, sessionResp0(dev_pub_key, dev_rand) ", concatStr)
-	return nil
-}
-
-func handleSessionVerify(b *bleServer, cliVerify []byte) error {
-	// Decrypt the token using the session key
-	decryptedToken, err := DecryptToken(cliVerify)
-	if err != nil {
-		log.Error("Failed to decrypt the token:", err)
-		return err
-	}
-
-	log.Debug("AHU pub key HEX: ", hex.EncodeToString(g_dev_pubkey[:]))
-	log.Debug("cli_verify HEX: ", hex.EncodeToString(cliVerify))
-	log.Debug("AHU pub key base64: ", base64.StdEncoding.EncodeToString(g_dev_pubkey[:]), " - decryptedToken from cli_verify base64: ", string(decryptedToken))
-	if bytes.Equal(g_dev_pubkey[:], decryptedToken) {
-		log.Debug("Token decryption successful. Confirmed the AHU public key. Generating token2 for client")
-		dev_verify, err := EncryptToken(b.clientPublicKey[:])
-		if err != nil {
-			log.Error("Error generating token2 for client")
-			return err
-		}
-		log.Debug("encrypted token is ", dev_verify)
-		cipherTextForClient := "S3," + base64.StdEncoding.EncodeToString(dev_verify)
-		log.Printf("dev_verify hex: %v", hex.EncodeToString(dev_verify))
-
-		b.responseToClientBytes = []byte(cipherTextForClient)
-	} else {
-		log.Error("AHU Public Key and Decrypted AES Token contain different bytes.")
-		b.responseToClientBytes = nil
-	}
-
-	return nil
 }

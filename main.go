@@ -17,7 +17,8 @@ func main() {
 	}
 	const adapterID = "hci0"
 	hostname = "AHU-PowerFlow"
-	bleService, err := NewBluetoothService(adapterID, hostname)
+	var myEncryptionAlgorithm IHandshake = &Curve25519Algo{}
+	bleService, err := NewBluetoothService(adapterID, hostname, myEncryptionAlgorithm)
 	if err != nil {
 		log.Fatalf("Failed to serve: %s", err)
 		os.Exit(2)
